@@ -29,11 +29,15 @@
 					)
 )
 
-(setq children_num 3);; how many process forked
+(setq children_num 2);; how many process forked
 
 (set 'talk (share))     (share talk 0)
 (set 'content (share))  (share content "")
 (setq going (share))  (share going nil) ;; 策略用一个share going来标识此时，是否有人工的数据进行输入，要避开和人工命令一起输入
+
+(set 'sid (semaphore))
+(semaphore sid 1);;默认不是0 
+
 
 (if (or (= ostype "Win32") (= ostype "Cygwin")) ;;设定设备名称，至于S10，也未必一定是S10,具体视cygwin环境
 	(setq dev "/dev/ttyS10") ;; on win32 with cygwin!
@@ -259,16 +263,16 @@
 							(cond 
 								((list? atret)
 									(dolist (x atret)
-										(share going true)
+										(semaphore sid 2)
 										(write_string_to_serial x)
 										(sleep 100);;; sleep 100ms to serial  
 									)
-									(share going nil)
+									(semaphore sid 1)
 								)
 								((string? atret)
-										(share going true)
+										(semaphore sid 2)
 										(write_string_to_serial atret)
-										(share going nil)
+										(semaphore sid 1)
 								)
 							)
 							
@@ -331,17 +335,17 @@
 							(cond 
 								((list? atret)
 									(dolist (x atret)
-										(share going true)
+										(semaphore sid 2)
 										(write_string_to_serial x)
 										
 										(sleep 100);;; sleep 100ms to serial  
 									)
-									(share going nil)
+									(semaphore sid 1)
 								)
 								((string? atret)
-										(share going true)
+										(semaphore sid 2)
 										(write_string_to_serial atret)
-										(share going nil)
+										(semaphore sid 1)
 								)
 							)						
 				)
@@ -376,9 +380,9 @@
 							(sleep 200)
 							;(assert buff)
 							
-							(share going true)
+							(semaphore sid 2)
 							(write_string_to_serial (chop buff 2))
-							(share going nil)
+							(semaphore sid 1)
 							(dotimes (z 50 (= (share talk) 999)) (assert "sleep10\n") (sleep 20) );; sleep 约500ms就结束等,挺慢的，串口的反应
 							(share talk 0);; 清除 标志，read process有返回了
 							(assert (share content))
@@ -516,14 +520,22 @@
 
 (define (get_base_info) ;; 基本策略，一直不停的获得目前环境的数据，存入数据库
 	(while 1
-		(unless (true? (share going))
-			(write_string_to_serial "d8 ff ff a0") ;; 温湿度 ，目前是广播，以后是用遍历所有短地址的精准方式进行查询
-			(sleep 1000)
-			(write_string_to_serial "a0") 
-			(sleep (* 10 1000));; 间隔
+		(if (= (semaphore sid) 1)
+			(begin
+				(write_string_to_serial "d8 ff ff a0") ;; 温湿度 ，目前是广播，以后是用遍历所有短地址的精准方式进行查询
+				(sleep 1000)
+			)
+			(= (semaphore sid) 1)
+			(begin
+				(write_string_to_serial "a0") 
+				(sleep 1000)
+			)
 		)
+		
+		(sleep (* 10 1000));; 间隔
 	)
 )
+
 (signal SIGINT ctrlC-handler)
 
 (setq cpid3 (spawn 'base_p (get_base_info)))
