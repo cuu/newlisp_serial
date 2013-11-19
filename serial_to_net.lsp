@@ -1,6 +1,12 @@
 ;;程序设计是没有退出的，所以函数的返回要及时 ,函数应该只考虑正确情况, openwrt BARRIER BREAKER (Bleeding Edge, r34253)
 ;;当newlisp退出时，所有没有close的open 的handle都会被 close掉
 ;;主要是openwrt下面使用的
+;;多进程操作，操作的结果，可能会流入不对的人手里
+;;设计不用考虑顺序的数据，把读来的数据，依照数据头，进行处理
+;;处理数据，很多处据是没用的，openwrt只接收认为需要的数据
+
+;; 策略是无序的，因为策略不是一个人，是多个人，任务永远是平行的，要说顺序也只能根据策略中的延时来决定谁先谁后了。
+
 (constant 'PORT1 8085)
 (constant 'PORT2 8086)
 (constant 'ReadMax 138)
@@ -16,10 +22,18 @@
 	(write 1 ret ) ;; 强制显示在stdout上
 )
 
+(setq help_string (string "AT&PAN=xx xx, yy yy | Set xx xx's PanID to yy yy\n"
+						"AT&SW=xx xx,pn yy yy yy,pn zz zz zz | Set xx xx's Switch's command content, pn is switch number ,will only be [0a ,0c 08,00] \n"
+						"AT&PWM=xx xx,rr gg bb aa | Set xx xx's PWM four channels values rr-aa only will be from 00 to FF\n"
+						"AT&PWM=rr,gg,bb,aa | set local device's PWM four channels values rr-aa only will be from 00 to FF \n"
+					)
+)
+
 (setq children_num 3);; how many process forked
 
 (set 'talk (share))     (share talk 0)
 (set 'content (share))  (share content "")
+(setq going (share))  (share going nil) ;; 策略用一个share going来标识此时，是否有人工的数据进行输入，要避开和人工命令一起输入
 
 (if (or (= ostype "Win32") (= ostype "Cygwin")) ;;设定设备名称，至于S10，也未必一定是S10,具体视cygwin环境
 	(setq dev "/dev/ttyS10") ;; on win32 with cygwin!
@@ -27,6 +41,13 @@
 )
 
 (setq dev1 DEV1);; 这儿没有考虑win了
+
+;;; load策略文件
+(if (file? "base.lsp")
+	(load "base.lsp")
+	(new Tree 'BASE);基本策略，永远在执行得到基本环境信息的功能
+)
+
 
 
 (define (strtohex str);;xx xx xx to hex
@@ -45,15 +66,11 @@
 		(begin
 			(cond
 				((= (trim cmd ) "AT+PING")
-					(if (string? str)
-						(setq cmd_line (string "d8 " (slice content 0 2) " " (slice content  2 4) " 70 69 6e 67"))
+					(if (string? str);;字符串形式
+						(setq cmd_line (string "70 69 6e 67"))
 					)
 				)
-				((= (trim cmd ) "AT+SD") ;;短地址
-					(if (string? str)
-						(setq cmd_line (string "d8 " (slice content 0 2) " " (slice content 2 4) " 02"))
-					)
-				)
+				
 				((= (trim cmd) "AT&PWM");; pwm wave; xx xx, 14 r g b a 
 					(if (and (= (length str) 2) (list? str)) 
 						(begin
@@ -194,51 +211,34 @@
 )
 
 
-(define (tcp_8088) ;; tcp 进程,专门处理串口数据
+(define (hanle_serial_data data);; 处理来自串口的数据，基本上就是得到数据，存入数据库，就这样，很重要的核心功能
+;; 要处理的data,可能是一只数据，也可能是几只数据粘在一条数据链上发过来的，例如，温度或是温度+湿度
+;; 每个数据除了唯一性的数据头之外，还必须带上发出设备的短地址，以区别是哪个房间的数据
+;; 数据结构永远是 头+短地址+内容
+;; 在数据库中，每个数据是以：短地址_数据名称 这样的key存在 
+;; 所有短地址（设备）的素引则是名称为 ALL_DEV 的key
+
+	(setq len 0)
+	(setq pos 0)
+	(setq len (length data))
 	
-	(set 'listen (net-listen 8088))
 	
-	(unless (not (nil? listen)) 
-		(begin
-			(print "listening 8088 failed\n")
-			(abort)
-			(exit)
+	(while (< pos (- len 1))
+		(if (and (= (char (nth pos data))  0xa0) (<= (+ pos 4) len)) ;; 温度,并且长度超过当前位置 2 个单位
+			(begin
+				(setq tmp nil)
+				(setq short_address nil)
+				(setq short_address (| (<< (char (nth (+ pos 1) data) ) 8 ) (char (nth (+ pos 2) data) ) ) )
+				(setq tmp (| (<< (char (nth (+ pos 3) data) ) 8 ) (char (nth (+ pos 4) data) ) ) )
+				
+				(BASE (string (format "%04X" short_address) "_Temp") tmp)
+				(save "base.lsp" 'BASE)
+				(setq pos (+ pos 2))
+			)
+			(++ pos);; 默认是一个一个加，一个个位的前进
 		)
 	)
-	(print "Waiting for connection on: 8088 \n")
 
-	(while (!= (share talk) 19)
-		(set 'connection (net-accept listen))
-		(while (not (net-select connection "r" 1000)))
-		
-		(while (net-select connection "w" 1000)
-			(if (setq rvlen (net-receive connection buff ReadMax "\r\n"))
-				(begin
-					(share talk 1)
-					(sleep 200)
-					;(assert buff)
-					(setq atret (parse_atcmd (chop buff 2)))
-					(assert atret "\n")
-					(cond 
-						((list? atret)
-							(dolist (x atret)
-								(write_string_to_serial x)
-								(sleep 100);;; sleep 100ms to serial  
-							)
-						)
-						((string? atret)
-							(write_string_to_serial atret)
-						)
-					)
-					
-					;; here deal with data
-				)
-			)
-		)
-		
-		(assert "close connect " connection "\n")
-		(net-close connection)
-	)		
 )
 
 (define (tcp_8087) ;; tcp 进程,专门处理串口数据; 在这儿spawn了几个进程，共同处理任务
@@ -259,12 +259,16 @@
 							(cond 
 								((list? atret)
 									(dolist (x atret)
+										(share going true)
 										(write_string_to_serial x)
 										(sleep 100);;; sleep 100ms to serial  
 									)
+									(share going nil)
 								)
 								((string? atret)
+										(share going true)
 										(write_string_to_serial atret)
+										(share going nil)
 								)
 							)
 							
@@ -278,6 +282,9 @@
 								)
 							)
 							
+							(if (starts-with buff "help")
+								(net-send connection help_string (length help_string))
+							)
 							(if (starts-with buff "close")
 								(net-close connection)
 								(net-send connection ">" 1)
@@ -324,12 +331,17 @@
 							(cond 
 								((list? atret)
 									(dolist (x atret)
+										(share going true)
 										(write_string_to_serial x)
+										
 										(sleep 100);;; sleep 100ms to serial  
 									)
+									(share going nil)
 								)
 								((string? atret)
+										(share going true)
 										(write_string_to_serial atret)
+										(share going nil)
 								)
 							)						
 				)
@@ -364,8 +376,9 @@
 							(sleep 200)
 							;(assert buff)
 							
+							(share going true)
 							(write_string_to_serial (chop buff 2))
-							
+							(share going nil)
 							(dotimes (z 50 (= (share talk) 999)) (assert "sleep10\n") (sleep 20) );; sleep 约500ms就结束等,挺慢的，串口的反应
 							(share talk 0);; 清除 标志，read process有返回了
 							(assert (share content))
@@ -434,6 +447,7 @@
 				;; 可能自动处理数据，比如Logger
 				;(if (> (length read_data) 0)
 					(assert "data:" read_data "\n")
+					(hanle_serial_data  read_data)
 				;)
 				
 			)
@@ -457,6 +471,7 @@
 						)
 						;; 可能自动处理数据，比如Logger
 						(assert read_data)
+						(hanle_serial_data  read_data)
 					)
 				)	
 			)
@@ -469,8 +484,6 @@
 ;; fork now
 (setq cpid1 (spawn 'read_p (read_serial_process)))
 (setq cpid2 (spawn 'tcp_p1 (tcp_8083)))
-
-
 
 (set 'server (net-listen 8087))
 	
@@ -490,7 +503,6 @@
         (setq (nth x pidarray) (spawn 'ibm (tcp_8087)) )
 )
 
-
 (define (ctrlC-handler)
 	(share talk 10000)
 	(abort)
@@ -502,5 +514,23 @@
 
 )
 
+(define (get_base_info) ;; 基本策略，一直不停的获得目前环境的数据，存入数据库
+	(while 1
+		(unless (true? (share going))
+			(write_string_to_serial "d8 ff ff a0") ;; 温湿度 ，目前是广播，以后是用遍历所有短地址的精准方式进行查询
+			(sleep 1000)
+			(write_string_to_serial "a0") 
+			(sleep (* 10 1000));; 间隔
+		)
+	)
+)
 (signal SIGINT ctrlC-handler)
 
+(setq cpid3 (spawn 'base_p (get_base_info)))
+
+(setq rules_dir "rules")
+(if (directory? rules_dir) ;; mean rules directory exsited
+	(begin
+		
+	)
+)
