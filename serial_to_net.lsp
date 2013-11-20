@@ -18,7 +18,13 @@
 (define (getpid) (sys-info 7))
 
 (define (assert)
-	(setq ret  "") (doargs (i) (extend ret (string i))) 
+	
+	(setq ret  "") 
+	;(doargs (i) (extend ret (string i))) 
+	
+	(dolist (x (args))
+		(extend ret (string x))
+	)
 	(write 1 ret ) ;; 强制显示在stdout上
 )
 
@@ -38,6 +44,8 @@
 (set 'sid (semaphore))
 (semaphore sid 1);;默认不是0 
 
+(global 'cmd_line)
+(setq cmd_line nil)
 
 (if (or (= ostype "Win32") (= ostype "Cygwin")) ;;设定设备名称，至于S10，也未必一定是S10,具体视cygwin环境
 	(setq dev "/dev/ttyS10") ;; on win32 with cygwin!
@@ -60,18 +68,25 @@
 	(setq ret nil)
 	
 	(dolist (x (parse str " "))
-		(extend ret (pack "b" (int x 0 16)) )
+		(extend ret (pack "b" (int (char x) 0 16)) );; char 函数只能处理 xx, 多了x不处理
 	)
 	ret
 )
 
 (define (make_serial_cmd cmd str)
-	(if-not (nil? str)
+	(setq cmd_line nil)
+	
+	(if (and (not (nil? cmd)) (not (nil? str)) ) ;; 有命令，并且带了参数
 		(begin
-			(cond
-				((= (trim cmd ) "AT+PING")
-					(if (string? str);;字符串形式
-						(setq cmd_line (string "70 69 6e 67"))
+			(cond	
+				((= (trim cmd ) "AT+PING");; AT+PING=XX XX,虽然ping一个已知了短地址的设备看上去很没意义，这就是为了检查这个设备是否活着，没有坏。
+					(if (list? str);;
+						(begin
+							(setq t1 (parse (str 0) " "))
+							(if (= (length t1) 2) ;; 严格限制输入的格式，必须为 xx xx,只有一个空格，不能有多余的空格
+								(setq cmd_line (string (str 0) " 70 69 6e 67"))
+							)
+						)
 					)
 				)
 				
@@ -98,12 +113,6 @@
 					
 				)
 					
-				((= (trim cmd) "AT&ROUTER")
-					(setq cmd_line (string "e0"))
-				)
-				((= (trim cmd) "AT&COORDI")
-					(setq cmd_line (string "c0"))
-				)
 				((= (trim cmd) "AT&PAN")
 					(if (and (= (length str) 2) (list? str))
 						(begin
@@ -149,32 +158,57 @@
 
 			)
 		)
+		(and (not (nil? cmd)) (nil? str)) ;; 表示只有命令，没有参数
+		(begin
+			(assert "only cmd \n")
+			(cond 
+				((= (trim cmd ) "AT+PING") ;; 没有参数，就表示是发给串口的，不是发向网络中某设备
+						(setq cmd_line (string "70 69 6e 67"))
+				)
+				((= (trim cmd) "AT&ROUTER")
+					(setq cmd_line (string "e0"))
+				)
+				((= cmd "AT&COORDI")
+					(assert "set to coordi\n")
+					(setq cmd_line (string "c0"))
+					(assert cmd_line)
+				)
+			)
+		)
 	)
-	cmd_line
 )
 
 (define (parse_atcmd str)
 	(setq ret nil)
+	
 	(cond 
 		((starts-with str "AT+")
-			(setq tmplst (parse str "="))
-			(setq cmd (tmplst 0) )
-			(if (> (length  tmplst) 1)
-				(begin
-					(setq content (tmplst 1))
+			(begin
+				(setq tmplst (parse str "="))
+				(setq cmd (tmplst 0) )
+				(setq content nil)
+				(if (> (length  tmplst) 1)
+					(begin
+						(setq content (tmplst 1))
+					)
 				)
+				(setq ret (make_serial_cmd cmd content) )
 			)
-			(setq ret (make_serial_cmd cmd content) )
 		)
 		( (starts-with str "AT&")
-			(setq tmplst (parse str "="))
-			(setq cmd (tmplst 0))
-			(if (> (length tmplst)  1)
-				(begin
-					(setq content_lst (parse ( tmplst 1 ) ","))
+			(begin
+				(setq tmplst (parse str "="))
+				(setq cmd (tmplst 0))
+				
+				(setq content_lst nil)
+				(if (> (length tmplst)  1)
+					(begin
+						(setq content_lst (parse ( tmplst 1 ) ","))
+					)
 				)
+				(make_serial_cmd (nth 0 tmplst) content_lst)
+				(setq ret (copy cmd_line))
 			)
-			(setq ret (make_serial_cmd cmd content_lst) )
 		)
 	)
 	
@@ -253,45 +287,62 @@
 		(while (not (net-select connection "r" 1000)))
 		
 				(while (net-select connection "w" 1000)
-					(if (setq rvlen (net-receive connection buff ReadMax "\r\n"))
+					(if (setq rvlen (net-receive connection buff ReadMax "\n"))
 						(begin
 							(share talk 1)
 							(sleep 200)
 							;(assert buff)
-							(setq atret (parse_atcmd (chop buff 2)))
-							(assert atret "\n")
-							(cond 
-								((list? atret)
-									(dolist (x atret)
-										(semaphore sid 2)
-										(write_string_to_serial x)
-										(sleep 100);;; sleep 100ms to serial  
-									)
-									(semaphore sid 1)
-								)
-								((string? atret)
-										(semaphore sid 2)
-										(write_string_to_serial atret)
-										(semaphore sid 1)
-								)
-							)
-							
-							(if (starts-with buff "AT+")
+							(setq tmp (chop buff 2))
+							(assert tmp " " (length tmp))
+							(setq atret (parse_atcmd tmp))
+							(setq atret cmd_line)
+							(assert "atret: " atret "\n")
+							(if-not (nil? atret)
 								(begin
-									(dotimes (z 50 (= (share talk) 999)) (assert "sleep10\n") (sleep 30) );; sleep 约500ms就结束等,挺慢的，串口的反应
-									(share talk 0);; 清除 标志，read process有返回了	
-									(assert (share content) "\n")
-									
-									(net-send connection (share content))
-								)
-							)
+									(cond 
+										((list? atret)
+											(dolist (x atret)
+											(semaphore sid 2)
+											(write_string_to_serial x)
+											(sleep 100);;; sleep 100ms to serial  
+											)
+											(semaphore sid 1)
+										)
+										((string? atret)
+											(semaphore sid 2)
+											(write_string_to_serial atret)
+											(semaphore sid 1)
+										)
+									)
 							
-							(if (starts-with buff "help")
-								(net-send connection help_string (length help_string))
-							)
-							(if (starts-with buff "close")
-								(net-close connection)
-								(net-send connection ">" 1)
+									(if (starts-with buff "AT+")
+										(begin
+										(dotimes (z 50 (= (share talk) 999)) (assert "sleep10\n") (sleep 30) );; sleep 约500ms就结束等,挺慢的，串口的反应
+										(share talk 0);; 清除 标志，read process有返回了	
+										(assert (share content) "\n")
+									
+										(net-send connection (share content))
+										(share content "")
+										)
+									(starts-with buff "AT&")
+										(begin
+											(net-send connection "+OK" 3)
+										)
+								
+									)
+							
+									(if (starts-with buff "help")
+										(net-send connection help_string (length help_string))
+									)
+									(if (starts-with buff "close")
+										(net-close connection)
+										(net-send connection ">" 1)
+									)
+								)
+								(nil? atret)
+								(begin
+									(assert "AT error\n")
+								)
 							)
 							;; here deal with data
 						)
@@ -374,20 +425,22 @@
 		(while (not (net-select connection "r" 1000)))
 		
 				(while (net-select connection "w" 1000)
-					(if (setq rvlen (net-receive connection buff ReadMax "\r\n"))
+					(if (setq rvlen (net-receive connection buff ReadMax "\n"))
 						(begin
 							(share talk 1)
 							(sleep 200)
 							;(assert buff)
 							
 							(semaphore sid 2)
-							(write_string_to_serial (chop buff 2))
+							(write_string_to_serial (chop buff 1))
 							(semaphore sid 1)
+							
 							(dotimes (z 50 (= (share talk) 999)) (assert "sleep10\n") (sleep 20) );; sleep 约500ms就结束等,挺慢的，串口的反应
 							(share talk 0);; 清除 标志，read process有返回了
 							(assert (share content))
 							(assert "\n")
 							(net-send connection (share content))
+							(share content "") ;; 清空，如果发送过，就清空
 							
 							;; here deal with data
 						)
@@ -442,6 +495,7 @@
 				
 				(setq read_data (read_serial dev) ) ;; 这儿，如果连接正常，会永远等待数据的进来，如果突然zigbee被拨掉了，也会退出来
 				;(sleep 100);;; make a delay to make sure data received
+				(assert read_data)
 				(if (= (share talk) 1)
 					(begin
 						(share content read_data)
