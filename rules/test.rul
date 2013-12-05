@@ -1,0 +1,110 @@
+;;;; 标准 newlisp 文件 
+;;; test.rul
+;;; 测试策略文件
+
+;;;他去读自已的参数文件 test.arg
+(context 'TEST) 
+
+(define (parse_cmd cmd_str)
+	(if (starts-with cmd_str "CMD")
+		(begin
+			(println "assgin " cmd_str)
+			(setq tmp (parse cmd_str "="))
+			(if (> (length tmp) 1)
+				(begin
+					(setq cmdstr (nth 1 tmp))
+					(setq dblist (MAIN:test_plugin_data))
+					(dolist (x dblist)
+						(if (find (nth 0 x) cmdstr) 
+							(begin
+								(if (not (nil? (MAIN:BASE (string (nth 1 x) ) )))
+									(replace  (nth 0 x) cmdstr  (string (MAIN:BASE (string (nth 1 x))) ))
+									(replace (nth 0 x) cmdstr (nth 1 x))
+								)
+								(println cmdstr)
+							)
+						)
+					)
+				)
+			)
+		)
+		(find "=" cmd_str)
+		(begin
+			(println "assign tree")
+			(setq tmp (parse cmd_str "="))
+			(if (> (length tmp) 1)
+				(begin
+					(MAIN:test_plugin_data (nth 0 tmp)  (nth 1 tmp));; store to the Tree 
+				)
+			)
+		)
+	)
+)
+
+(define (test_plugin)
+
+	(if (file? "base.lsp")
+		(load "base.lsp")
+		(new Tree 'MAIN:BASE); 防止没有这个base.lsp存在导致错误
+	)
+	
+	(setq PLUGIN_NAME "test")
+	(new Tree 'MAIN:test_plugin_data) ;; store whatever the plugin defined ,the name"test_plugin_data should be unique, because this is like a namespace, newlisp has no sub namspace except under MAIN
+	(setq my_sec_name "argscmd")
+	(setq arg_file (string "rules/" PLUGIN_NAME ".arg"))
+	(set 'in-file (open arg_file "read"))
+	
+	(while true
+		(if (not (nil? in-file))
+			(begin
+				(setq abc (read-line in-file))
+				(if (not (nil? abc))
+					(begin
+						(if (and  (starts-with (current-line) "[") (ends-with (current-line) "]"));; means [xxx] style 
+							(begin
+								(setq section_name (slice (chop (current-line) 1 ) 1 ) )
+								(println "section name " section_name)
+								(if (= section_name my_sec_name)
+									(begin
+										(setq data (read-line in-file))
+										(if (nil? data) (setq data ""))
+										
+										(while (and (not (nil? data)) (not (starts-with  data "[" ))  )
+											(parse_cmd data)
+											(setq data (read-line in-file))
+										)
+										(println "do my_sec_name over")
+									)
+								)
+							)
+						)
+					)
+					(nil? abc);;可能没有内容，可能读完了
+					(begin
+						(println "restart now")
+						(close in-file)
+						(sleep (* 1000 10))
+						(if (file? "base.lsp")
+							(load "base.lsp")
+							(new Tree 'MAIN:BASE)
+						)
+						(setq in-file (open arg_file "read"))
+					)
+				)
+			)
+			(nil? in-file);; 可能没有这个文件，那就不停的读,或者是open错误
+			(begin
+				(println "in-file nil")
+				(sleep (* 1000 10))
+				(setq in-file (open arg_file "read"))
+			)
+		)
+		;(sleep (* 1000 10))
+		
+	)
+);;ends
+
+(fork (test_plugin))
+
+(context MAIN);
+
