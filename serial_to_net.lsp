@@ -35,7 +35,7 @@
 					)
 )
 
-(setq children_num 2);; how many process forked
+(setq children_num 2);; how many processes forked
 
 (set 'talk (share))     (share talk 0)
 (set 'content (share))  (share content "")
@@ -60,7 +60,17 @@
 	(new Tree 'BASE);基本策略，永远在执行得到基本环境信息的功能
 )
 
+(define (hextostring hex_buf); xxxxxxx to xx xx xx xx
+	(setq nr (length hex_buf))
+	(setq ret "")
+	(setq upk_lst (unpack (dup "b " nr) hex_buf))
 
+	(dolist (y upk_lst)
+		(extend ret (format "%02x " y))
+	)
+	
+	(chop ret 1)
+)
 
 (define (strtohex str);;xx xx xx to hex
 	(setq bn (length (parse str " ")))
@@ -248,7 +258,7 @@
     (write_serial ret len)
 )
 
-
+;;;憨豆呆他
 (define (hanle_serial_data data);; 处理来自串口的数据，基本上就是得到数据，存入数据库，就这样，很重要的核心功能
 ;; 要处理的data,可能是一只数据，也可能是几只数据粘在一条数据链上发过来的，例如，温度或是温度+湿度
 ;; 每个数据除了唯一性的数据头之外，还必须带上发出设备的短地址，以区别是哪个房间的数据
@@ -271,6 +281,23 @@
 				
 				(BASE (string (format "%04X" short_address) "_Temp") tmp)
 				(save "base.lsp" 'BASE)
+				(setq pos (+ pos 4))
+			)
+			(and (= (char (nth pos data))  0x01) (<= (+ pos 2) len)) ;;;取子节点短地址
+			(begin
+				(setq short_address nil)
+				(setq short_address (string (nth (+ pos 1) data) " " (nth (+ pos 2) data))) ;; 格式就是字符串的 xx xx,这样方面查看
+				(if (nil? (BASE "NODES"))
+					(begin
+						(BASE "NODES" (list short_address))
+					)
+					(not (nil? (BASE "NODES")))
+					(begin
+						(if (not (find short_address (BASE "NODES")))
+							(push short_address (BASE "NODES"))
+						)
+					)
+				)
 				(setq pos (+ pos 2))
 			)
 			(++ pos);; 默认是一个一个加，一个个位的前进
@@ -453,6 +480,7 @@
 	)		
 )
 
+
 (define (read_serial dv)
     (setq ret "")
     (setq nr -1)
@@ -465,11 +493,8 @@
 			(setq ret "")
 			
 			(while (> nr 0)
-				(setq upk_lst (unpack (dup "b " nr) buff))
-
-				(dolist (y upk_lst)
-					(extend ret (format "%x " y))
-				)
+				(extend ret buff)
+				
 				(setq nr (peek fd))
 				(if (> nr 0)
 					(setq nr (read fd buff nr))
@@ -495,7 +520,6 @@
 				
 				(setq read_data (read_serial dev) ) ;; 这儿，如果连接正常，会永远等待数据的进来，如果突然zigbee被拨掉了，也会退出来
 				;(sleep 100);;; make a delay to make sure data received
-				(assert read_data)
 				(if (= (share talk) 1)
 					(begin
 						(share content read_data)
@@ -504,7 +528,7 @@
 				)
 				;; 可能自动处理数据，比如Logger
 				;(if (> (length read_data) 0)
-					(assert "data:" read_data "\n")
+					(assert "data:" (hextostring read_data )"\n")
 					(hanle_serial_data  read_data)
 				;)
 				
@@ -528,7 +552,7 @@
 							)
 						)
 						;; 可能自动处理数据，比如Logger
-						(assert read_data)
+						(assert (hextostring read_data))
 						(hanle_serial_data  read_data)
 					)
 				)	
@@ -573,6 +597,7 @@
 )
 
 (define (get_base_info) ;; 基本策略，一直不停的获得目前环境的数据，存入数据库
+	(setq sleep_time 0)
 	(while 1
 		(if (= (semaphore sid) 1)
 			(begin
@@ -587,6 +612,16 @@
 		)
 		
 		(sleep (* 10 1000));; 间隔
+		(++ sleep_time)
+		(if (> sleep_time 2);; 间隔次数
+			(begin
+				(write_string_to_serial "d8 ff ff 01");; 得到全部的子节点
+				(setq sleep_time 0)
+				(sleep 1000)
+			)
+			
+		)
+		(sleep (* 10 1000));; 间隔
 	)
 )
 
@@ -595,8 +630,20 @@
 (setq cpid3 (spawn 'base_p (get_base_info)))
 
 (setq rules_dir "rules")
-(if (directory? rules_dir) ;; mean rules directory exsited
-	(begin
-		
+
+(define (load_rules)
+	(if (directory? rules_dir) ;; mean rules directory exsited
+		(begin
+			(setq lsp_lst (directory rules_dir "\\.rul") );; 后辍来个rules,其实就是标准的 newlisp 文件
+			(dolist (x lsp_lst)
+				(load (string rules_dir "/" x)) ;; 必须正确，否则会出错，进程退出了,每个策略就是一个进程 
+			)
+		)
+		;;不存在rules就不load进去
 	)
 )
+
+(sleep (* 1000 5))
+(load_rules)
+
+
