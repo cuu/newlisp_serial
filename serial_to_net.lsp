@@ -279,7 +279,7 @@
 				(setq short_address (| (<< (char (nth (+ pos 1) data) ) 8 ) (char (nth (+ pos 2) data) ) ) )
 				(setq tmp (| (<< (char (nth (+ pos 3) data) ) 8 ) (char (nth (+ pos 4) data) ) ) )
 				
-				(BASE (string (format "%04X" short_address) "_Temp") tmp)
+				(BASE (string (format "%04X" short_address) "_TEMP") tmp)
 				(save "base.lsp" 'BASE)
 				(setq pos (+ pos 4))
 			)
@@ -307,7 +307,18 @@
 			(begin
 				(setq short_address nil)
 				(setq short_address (| (<< (char (nth (+ pos 1) data) ) 8 ) (char (nth (+ pos 2) data) ) ) ) ;; 格式就是字符串的 xx xx,这样方面查看
-				(setq tmp (slice data 2 8))
+				(setq tmp1 (get-int (slice data 2 4)))
+				(setq tmp2 (get-int (slice data 6 4)))
+				(setq pm25_ratio (div tmp1 tmp2))
+				(if (<= pm25_ratio 0.08)
+						(setq tmp 0)
+						(and (> pm25_ratio 0.08) (<= pm25_ratio 0.1 ))
+						(setq tmp 1)
+						(and (> pm25_ratio 0.1 ) (<= pm25_ratio 0.14))
+						(setq tmp 2)
+						(and (> pm25_ratio 0.14) (<= pm25_ratio 0.40)) ;; pm25 太大了也是计算错误
+						(setq tmp 3)
+				) 
 				(BASE (string (format "%04X" short_address) "_PM25") tmp)
 				(setq pos (+ pos 10))
 			)
@@ -633,7 +644,7 @@
 			(= (semaphore sid) 1)
 			(begin
 				(write_string_to_serial "d8 ff ff a6")
-				(sleep 1000)
+				(sleep 30000);; pm25 sleep at least 30 seconds
 			)
 			
 			(= (semaphore sid) 1)

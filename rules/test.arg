@@ -5,7 +5,7 @@ DEV1=环境温度的设备
 DEV2=空调的设备
 CMD=命令内容
 [argscmd]
-DEV1=B8BD_Temp
+DEV1=B8BD_TEMP
 TEMP1=100
 DEV2=d8 ff ff f1 0e
 CMD= (if (> DEV1 TEMP1) (if (lambda? MAIN:write_string_to_serial) (MAIN:write_string_to_serial "DEV2")  (println "No serial function") )   )
