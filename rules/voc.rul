@@ -1,9 +1,9 @@
-;;;; ±ê×¼ newlisp ÎÄ¼ş 
-;;; test.rul
-;;; ²âÊÔ²ßÂÔÎÄ¼ş
+;;;; æ ‡å‡† newlisp æ–‡ä»¶ 
+;;; voc.rul
+;;; VOCæœ‰å®³æ°”ä½“ç­–ç•¥,é©±åŠ¨ä¸€ä¸ªpwmçš„é£æ‰‡
 
-;;;ËûÈ¥¶Á×ÔÒÑµÄ²ÎÊıÎÄ¼ş test.arg
-(context 'TEST) 
+;;;ä»–å»è¯»è‡ªå·²çš„å‚æ•°æ–‡ä»¶ test.arg
+(context 'VOC) 
 
 (define (parse_cmd cmd_str)
 	(if (starts-with cmd_str "CMD")
@@ -22,7 +22,7 @@
 									(replace (nth 0 x) cmdstr (nth 1 x))
 								)
 								(println cmdstr)
-								;; ÆäÊµÔÚÖ´ĞĞÖ®Ç°£¬±ØĞëÒªµÃµ½Ö´ĞĞµÄĞí¿É
+								;; å…¶å®åœ¨æ‰§è¡Œä¹‹å‰ï¼Œå¿…é¡»è¦å¾—åˆ°æ‰§è¡Œçš„è®¸å¯
 								(eval-string cmdstr)
 								(sleep 1000);every time executed a serial command ,sleep 1s 
 							)
@@ -44,14 +44,14 @@
 	)
 )
 
-(define (test_plugin)
+(define (voc_plugin)
 
 	(if (file? "base.lsp")
 		(load "base.lsp")
-		(new Tree 'MAIN:BASE); ·ÀÖ¹Ã»ÓĞÕâ¸öbase.lsp´æÔÚµ¼ÖÂ´íÎó
+		(new Tree 'MAIN:BASE); é˜²æ­¢æ²¡æœ‰è¿™ä¸ªbase.lspå­˜åœ¨å¯¼è‡´é”™è¯¯
 	)
 	
-	(setq PLUGIN_NAME "test")
+	(setq PLUGIN_NAME "voc")
 	(new Tree 'MAIN:test_plugin_data) ;; store whatever the plugin defined ,the name"test_plugin_data should be unique, because this is like a namespace, newlisp has no sub namspace except under MAIN
 	(setq my_sec_name "argscmd")
 	(setq arg_file (string "rules/" PLUGIN_NAME ".arg"))
@@ -83,7 +83,7 @@
 							)
 						)
 					)
-					(nil? abc);;¿ÉÄÜÃ»ÓĞÄÚÈİ£¬¿ÉÄÜ¶ÁÍêÁË
+					(nil? abc);;å¯èƒ½æ²¡æœ‰å†…å®¹ï¼Œå¯èƒ½è¯»å®Œäº†
 					(begin
 						(println "restart now")
 						(close in-file)
@@ -96,7 +96,7 @@
 					)
 				)
 			)
-			(nil? in-file);; ¿ÉÄÜÃ»ÓĞÕâ¸öÎÄ¼ş£¬ÄÇ¾Í²»Í£µÄ¶Á,»òÕßÊÇopen´íÎó
+			(nil? in-file);; å¯èƒ½æ²¡æœ‰è¿™ä¸ªæ–‡ä»¶ï¼Œé‚£å°±ä¸åœçš„è¯»,æˆ–è€…æ˜¯opené”™è¯¯
 			(begin
 				(println "in-file nil")
 				(sleep (* 1000 10))
@@ -108,7 +108,7 @@
 	)
 );;ends
 
-(fork (test_plugin))
+(fork (voc_plugin))
 
 (context MAIN);
 

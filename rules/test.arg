@@ -7,7 +7,5 @@ CMD=ÃüÁîÄÚÈÝ
 [argscmd]
 DEV1=B8BD_Temp
 TEMP1=100
-DEV2=d8 xx xx aa bb cc
-CMD= (if (> DEV1 TEMP1) (write_to_serial "DEV2") )
-
-
+DEV2=d8 ff ff f1 0e
+CMD= (if (> DEV1 TEMP1) (if (lambda? MAIN:write_string_to_serial) (MAIN:write_string_to_serial "DEV2")  (println "No serial function") )   )

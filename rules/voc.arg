@@ -1,0 +1,17 @@
+;; 一定要在CMD之前把所有的变量都注上，否则运行无结果
+;; 这些指令都可能由php之类的SERVER  端来玩成
+[args]
+DEV1=设备的VOC有害值
+DEV2=一个空气净化器
+CMD=命令内容
+[argscmd]
+DEV1=B8BD_VOC
+L1=0
+L2=1
+L3=2
+L4=3
+CMD1=d8 ff ff 18 64
+CMD2=d8 ff ff 18 128
+CMD3=d8 ff ff 18 192
+CMD4=d8 ff ff 18 255
+CMD= (if (= DEV1 L1) (if (lambda? MAIN:write_string_to_serial) (MAIN:write_string_to_serial "CMD1")  (println "No serial function") )  (= DEV1 L2) (if (lambda? MAIN:write_string_to_serial) (MAIN:write_string_to_serial "CMD2")  (println "No serial function") ) (= DEV1 L3) (if (lambda? MAIN:write_string_to_serial) (MAIN:write_string_to_serial "CMD3")  (println "No serial function") )  (= DEV1 L4) (if (lambda? MAIN:write_string_to_serial) (MAIN:write_string_to_serial "CMD4")  (println "No serial function") )  )

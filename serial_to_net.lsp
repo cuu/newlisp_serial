@@ -286,20 +286,41 @@
 			(and (= (char (nth pos data))  0x01) (<= (+ pos 2) len)) ;;;取子节点短地址
 			(begin
 				(setq short_address nil)
-				(setq short_address (string (nth (+ pos 1) data) " " (nth (+ pos 2) data))) ;; 格式就是字符串的 xx xx,这样方面查看
+				(setq short_address (| (<< (char (nth (+ pos 1) data) ) 8 ) (char (nth (+ pos 2) data) ) ) ) ;; 格式就是字符串的 xx xx,这样方面查看
+				(setq sa_string (format "%04x" short_address) )
+				
 				(if (nil? (BASE "NODES"))
 					(begin
-						(BASE "NODES" (list short_address))
+						(BASE "NODES" (list sa_string))
 					)
 					(not (nil? (BASE "NODES")))
 					(begin
-						(if (not (find short_address (BASE "NODES")))
-							(push short_address (BASE "NODES"))
+						(if (not (find sa_string (BASE "NODES")))
+							(push sa_string (BASE "NODES"))
 						)
 					)
 				)
 				(setq pos (+ pos 2))
 			)
+			
+			(and (= (char (nth pos data))  0xa6) (<= (+ pos 10) len)) ;;; 取pm25 a8 xx xx cc cc cc cc dd dd dd dd, c d is low and counter
+			(begin
+				(setq short_address nil)
+				(setq short_address (| (<< (char (nth (+ pos 1) data) ) 8 ) (char (nth (+ pos 2) data) ) ) ) ;; 格式就是字符串的 xx xx,这样方面查看
+				(setq tmp (slice data 2 8))
+				(BASE (string (format "%04X" short_address) "_PM25") tmp)
+				(setq pos (+ pos 10))
+			)
+			
+			(and (= (char (nth pos data))  0xa8) (<= (+ pos 3) len)) ;; 取 voc 有害气体数值， 数值范围只有 是 00 01 10 11 四种可能
+			(begin
+				(setq short_address nil)
+				(setq short_address (| (<< (char (nth (+ pos 1) data) ) 8 ) (char (nth (+ pos 2) data) ) ) ) ;; 格式就是字符串的 xx xx,这样方面查看
+				(setq tmp (char (nth (+ pos 3) data))	)
+				(BASE (string (format "%04X" short_address) "_VOC") tmp)
+				(setq pos (+ pos 3))			
+			)
+			
 			(++ pos);; 默认是一个一个加，一个个位的前进
 		)
 	)
@@ -607,6 +628,17 @@
 			(= (semaphore sid) 1)
 			(begin
 				(write_string_to_serial "a0") 
+				(sleep 1000)
+			)
+			(= (semaphore sid) 1)
+			(begin
+				(write_string_to_serial "d8 ff ff a6")
+				(sleep 1000)
+			)
+			
+			(= (semaphore sid) 1)
+			(begin
+				(write_string_to_serial "d8 ff ff a8")
 				(sleep 1000)
 			)
 		)
