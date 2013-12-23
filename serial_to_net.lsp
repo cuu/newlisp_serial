@@ -12,11 +12,12 @@
 (constant 'ReadMax 138)
 (constant 'SIGINT 2)
 (constant 'DEV0 "/dev/ttyUSB0")
-(constant 'DEV1 "/dev/ttyUSB1")
+(constant 'DEV1 "/dev/ttyATH0")
 
 (define (get-parent_id) (sys-info 6))
 (define (getpid) (sys-info 7))
 
+(change-dir "/usr/share")
 (define (assert)
 	
 	(setq ret  "") 
@@ -26,6 +27,11 @@
 		(extend ret (string x))
 	)
 	(write 1 ret ) ;; 强制显示在stdout上
+)
+
+(define (assertln)
+	(assert (args))
+	(assert "\n")
 )
 
 (setq help_string (string "AT&PAN=xx xx, yy yy | Set xx xx's PanID to yy yy\n"
@@ -62,14 +68,23 @@
 
 (define (hextostring hex_buf); xxxxxxx to xx xx xx xx
 	(setq nr (length hex_buf))
-	(setq ret "")
-	(setq upk_lst (unpack (dup "b " nr) hex_buf))
-
-	(dolist (y upk_lst)
-		(extend ret (format "%02x " y))
-	)
+	(assert "hextostring length: " nr "\n")
+	(setq ret nil)
+	(setq dupstr (dup "b " nr))
 	
-	(chop ret 1)
+	(if (> (length dupstr) 1)
+		(begin
+			(setq dupstr (chop dupstr 1))
+	
+		(setq upk_lst (unpack dupstr hex_buf))
+
+		(dolist (y upk_lst)
+			(extend ret (format "%02x " y))
+		)
+	
+		(setq ret (chop ret 1))
+		)
+	)
 )
 
 (define (strtohex str);;xx xx xx to hex
@@ -231,7 +246,8 @@
 	(setq baud 38400) ;;波特率
 	(if (or (= ostype "Win32") (= ostype "Cygwin")) ;;串口配置指令
 		(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " -ixon -icanon  min 0 time 30") )
-		(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " ignbrk -brkint -icrnl -imaxbel -opost -onlcr -isig -icanon -iexten -echo -echoe -echok -echoctl -echoke noflsh   min 150 time 1"))
+		;(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " -ignbrk -brkint -igncr －ignpar -imaxbel -opost -onlcr -isig -icanon -iexten -echo -echoe -echok -echoctl -echoke noflsh   min 150 time 1"))
+		(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " raw min 150 time 1"))
 	)
 	(exec serial_port_setting)
 )
@@ -249,13 +265,13 @@
 
 (define (write_string_to_serial str)
     (setq str_lst (parse str " "))
-	(setq len (length str_lst))
+		(setq len (length str_lst))
     (setq ret "")
     (dolist (x str_lst)
         (setq tmp_str (slice x 0 2)) ;; force the input to be XX
         (extend ret (char (int tmp_str 0 16)))
     )
-    (write_serial ret len)
+    (write_serial ret (length ret))
 )
 
 ;;;憨豆呆他
@@ -271,23 +287,37 @@
 	(setq len (length data))
 	
 	
-	(while (< pos (- len 1))
-		(if (and (= (char (nth pos data))  0xa0) (<= (+ pos 4) len)) ;; 温度,并且长度超过当前位置 2 个单位
-			(begin
+	(while (< pos len)
+		(cond
+			((and (= (char (nth pos data))  0xa0) (< (+ pos 4) len)) ;; 温度,并且长度超过当前位置 2 个单位
+				(begin
+					(setq tmp nil)
+					(setq short_address nil)
+					(setq short_address (format "%04X" (get-int (reverse (slice data pos 2)))))
+					
+					;(setq tmp (| (<< (char (nth (+ pos 3) data) ) 8 ) (char (nth (+ pos 4) data) ) ) )
+					(setq tmp (get-int (slice data 2 2)))
+					(BASE (string  (slice short_address 0 4) "_TEMP") (int tmp))
+					(save "base.lsp" 'BASE)
+					(setq pos (+ pos 5))
+				)
+			)
+ 			((and (= (char (nth pos data))  0xa1) (< (+ pos 4) len)) ;; 温度,并且长度超过当前位置 2 个单位
+				(begin
 				(setq tmp nil)
 				(setq short_address nil)
-				(setq short_address (| (<< (char (nth (+ pos 1) data) ) 8 ) (char (nth (+ pos 2) data) ) ) )
-				(setq tmp (| (<< (char (nth (+ pos 3) data) ) 8 ) (char (nth (+ pos 4) data) ) ) )
-				
-				(BASE (string (format "%04X" short_address) "_TEMP") tmp)
+				(setq short_address (format "%04X" (get-int (reverse (slice data pos 2)))))
+				(setq tmp (get-int (reverse (slice data 2 2))))
+				(BASE (string  (slice short_address 0 4) "_HUMI") (int tmp));; humidity 
 				(save "base.lsp" 'BASE)
 				(setq pos (+ pos 4))
-			)
-			(and (= (char (nth pos data))  0x01) (<= (+ pos 2) len)) ;;;取子节点短地址
+				)
+			)		
+			((and (= (char (nth pos data))  0x02) (< (+ pos 2) len)) ;;;取子节点短地址
 			(begin
 				(setq short_address nil)
-				(setq short_address (| (<< (char (nth (+ pos 1) data) ) 8 ) (char (nth (+ pos 2) data) ) ) ) ;; 格式就是字符串的 xx xx,这样方面查看
-				(setq sa_string (format "%04x" short_address) )
+				(setq short_address (format "%04X" (get-int (reverse (slice data pos 2)))))
+				(setq sa_string (slice short_address 0 4))
 				
 				(if (nil? (BASE "NODES"))
 					(begin
@@ -301,40 +331,41 @@
 					)
 				)
 				(setq pos (+ pos 2))
-			)
+			))
 			
-			(and (= (char (nth pos data))  0xa6) (<= (+ pos 10) len)) ;;; 取pm25 a8 xx xx cc cc cc cc dd dd dd dd, c d is low and counter
+			((and (= (char (nth pos data))  0xa6) (< (+ pos 6) len)) ;;; 取pm25 a8 xx xx cc cc dd dd, c d is low and counter
 			(begin
 				(setq short_address nil)
-				(setq short_address (| (<< (char (nth (+ pos 1) data) ) 8 ) (char (nth (+ pos 2) data) ) ) ) ;; 格式就是字符串的 xx xx,这样方面查看
-				(setq tmp1 (get-int (slice data 2 4)))
-				(setq tmp2 (get-int (slice data 6 4)))
+				(setq short_address (format "%04X" (get-int (reverse (slice data pos 2)))))
+				(setq tmp1 (get-int (reverse (slice data 2 2))))
+				(setq tmp2 (get-int (reverse (slice data 4 2))))
 				(setq pm25_ratio (div tmp1 tmp2))
-				(if (<= pm25_ratio 0.08)
+				(if (<= pm25_ratio 0.008)
 						(setq tmp 0)
-						(and (> pm25_ratio 0.08) (<= pm25_ratio 0.1 ))
+						(and (> pm25_ratio 0.008) (<= pm25_ratio 0.1 ))
 						(setq tmp 1)
-						(and (> pm25_ratio 0.1 ) (<= pm25_ratio 0.14))
+						(and (> pm25_ratio 0.01 ) (<= pm25_ratio 0.14))
 						(setq tmp 2)
-						(and (> pm25_ratio 0.14) (<= pm25_ratio 0.40)) ;; pm25 太大了也是计算错误
+						(and (> pm25_ratio 0.014) (<= pm25_ratio 0.40)) ;; pm25 太大了也是计算错误
 						(setq tmp 3)
 				) 
-				(BASE (string (format "%04X" short_address) "_PM25") tmp)
+				(BASE (string (slice short_address 0 4) "_PM25") (int tmp))
 				(setq pos (+ pos 10))
-			)
-			
-			(and (= (char (nth pos data))  0xa8) (<= (+ pos 3) len)) ;; 取 voc 有害气体数值， 数值范围只有 是 00 01 10 11 四种可能
+			))
+			((and (= (char (nth pos data))  0xa8) (< (+ pos 3) len)) ;; 取 voc 有害气体数值， 数值范围只有 是 00 01 10 11 四种可能a8 xx xx ??
 			(begin
 				(setq short_address nil)
-				(setq short_address (| (<< (char (nth (+ pos 1) data) ) 8 ) (char (nth (+ pos 2) data) ) ) ) ;; 格式就是字符串的 xx xx,这样方面查看
-				(setq tmp (char (nth (+ pos 3) data))	)
-				(BASE (string (format "%04X" short_address) "_VOC") tmp)
+				(setq short_address (format "%04X" (get-int (reverse (slice data pos 2)))))
+				(setq tmp (get-int (nth (+ pos 3) data))	)
+				(if (nil? tmp) (setq tmp -1)
+				)
+				(BASE (string (slice short_address 0 4) "_VOC") (int tmp))
 				(setq pos (+ pos 3))			
-			)
-			
-			(++ pos);; 默认是一个一个加，一个个位的前进
+			))
 		)
+		(++ pos);; 默认是一个一个加，一个个位的前进
 	)
+	
 
 )
 
@@ -361,22 +392,24 @@
 									(cond 
 										((list? atret)
 											(dolist (x atret)
-											(semaphore sid 2)
+											
 											(write_string_to_serial x)
 											(sleep 100);;; sleep 100ms to serial  
 											)
-											(semaphore sid 1)
+											
 										)
 										((string? atret)
-											(semaphore sid 2)
+											
 											(write_string_to_serial atret)
-											(semaphore sid 1)
+											
 										)
 									)
 							
 									(if (starts-with buff "AT+")
 										(begin
-										(dotimes (z 50 (= (share talk) 999)) (assert "sleep10\n") (sleep 30) );; sleep 约500ms就结束等,挺慢的，串口的反应
+										(dotimes (z 50 (= (share talk) 999)) (sleep 30) );; sleep 约500ms就结束等,挺慢的，串口的反应
+										(assert z " sleep over\n")
+										
 										(share talk 0);; 清除 标志，read process有返回了	
 										(assert (share content) "\n")
 									
@@ -408,9 +441,9 @@
 					)
 				)
 			
-		
 		(assert "close connect 8087\n")
 		(net-close connection)
+		
 	)		
 )
 
@@ -445,12 +478,12 @@
 							(cond 
 								((list? atret)
 									(dolist (x atret)
-										(semaphore sid 2)
+										
 										(write_string_to_serial x)
 										
 										(sleep 100);;; sleep 100ms to serial  
 									)
-									(semaphore sid 1)
+									
 								)
 								((string? atret)
 										(semaphore sid 2)
@@ -461,6 +494,7 @@
 				)
 			)
 		)
+		
 		(assert "close connect " (net-peer connection) "->" (net-local connection) " \n")
 		(net-close connection)
 	)		
@@ -481,6 +515,7 @@
 
 	(while (!= (share talk) 19)
 		(set 'connection (net-accept listen))
+		(net-send connection ">" 1)
 		(while (not (net-select connection "r" 1000)))
 		
 				(while (net-select connection "w" 1000)
@@ -489,12 +524,14 @@
 							(share talk 1)
 							(sleep 200)
 							;(assert buff)
-							
 							(semaphore sid 2)
 							(write_string_to_serial (chop buff 1))
-							(semaphore sid 1)
+							(semaphore sid -1)
 							
-							(dotimes (z 50 (= (share talk) 999)) (assert "sleep10\n") (sleep 20) );; sleep 约500ms就结束等,挺慢的，串口的反应
+							(setq abctimer 0)
+							(dotimes (z 50 (= (share talk) 999)) (setq abctimer z) (sleep 20) );; sleep 约500ms就结束等,挺慢的，串口的反应
+							
+							(assert abctimer " times sleep over\n")
 							(share talk 0);; 清除 标志，read process有返回了
 							(assert (share content))
 							(assert "\n")
@@ -506,88 +543,77 @@
 					)
 				)
 			
-		
 		(assert "close connect port1\n")
 		(net-close connection)
+		(while (> (semaphore sid) 1)
+				(semaphore sid -1)
+		)
+		(assert "semaphore sid " (semaphore sid) "\n")
 	)		
 )
 
 
-(define (read_serial dv)
-    (setq ret "")
-    (setq nr -1)
-	(setq tmp "")
-	(setq fd (open dv "r"))
+(define (read_serial fd)
+    (setq ret nil)
+    (setq nr nil)
+		(setq tmp nil)
+	;(setq fd (open dv "r"))
 			
-	(if-not (nil? fd)
-		(begin
-			(setq nr (read fd buff 150))
-			(setq ret "")
+	;(if-not (nil? fd)
+	;	(begin
+			(setq nr (read fd buff 64))
 			
-			(while (> nr 0)
+			;(while (and (> nr 0) (not (nil? nr)))
+			(while (not (nil? nr))
 				(extend ret buff)
 				
+			;	(setq nr (peek fd))
+			;  (sleep 100)
 				(setq nr (peek fd))
-				(if (> nr 0)
-					(setq nr (read fd buff nr))
-					(setq nr -1)
-				)
+				;(if (> nr 0)
+					(setq nr (read fd buff (* nr 2) ))
+				;)
 			)
-			(close fd)
-		)
-	)
+			;(close fd)
+		;)
+	;)
 	ret
 )
 
 
 (define (read_serial_process) ;;读串口的取程,启动时，考虑没有进程占用 /dev/ttyUSB0
-	(setq rusbdev nil)
 		
 	(while (not (= (share talk) 10000))
 		(if (file? dev)
 			(begin
-				
 				;;从串口读取数据
-				(sleep 40)
-				
-				(setq read_data (read_serial dev) ) ;; 这儿，如果连接正常，会永远等待数据的进来，如果突然zigbee被拨掉了，也会退出来
+				(if (nil? rusbdev);; 如果usbdev 重新插上了
+					(setq rusbdev (open dev "r"))
+				)
+				(setq read_data (read_serial rusbdev) ) ;; 这儿，如果连接正常，会永远等待数据的进来，如果突然zigbee被拨掉了，也会退出来
+				(assert "read_data length: " (length read_data) "\n")
 				;(sleep 100);;; make a delay to make sure data received
 				(if (= (share talk) 1)
 					(begin
 						(share content read_data)
+						(while (!= (length (share content)) (length read_data))
+							(share content read_data)
+						)
 						(share talk 999)
 					)
 				)
 				;; 可能自动处理数据，比如Logger
 				;(if (> (length read_data) 0)
-					(assert "data:" (hextostring read_data )"\n")
+					(assert "data:" (hextostring read_data ) " | " read_data "\n")
 					(hanle_serial_data  read_data)
 				;)
 				
 			)
-			(begin ;;; dev {which could be ttyUSB0 or ttyUSB1} does not exsited
-				
-				(if (file? dev1)
-					(begin
-						(setq tmp dev1)
-						(setq dev1 dev)
-						(setq dev tmp)
-						(set_serial dev)
-						;;从串口读取数据
-						(sleep 40)
-						(setq read_data (read_serial dev) )
-						;;(sleep 300);;; make a delay to make sure data received
-						(if (= (share talk) 1)
-							(begin
-								(share content read_data)
-								(share talk 999)
-							)
-						)
-						;; 可能自动处理数据，比如Logger
-						(assert (hextostring read_data))
-						(hanle_serial_data  read_data)
-					)
-				)	
+			(if-not (file? dev)
+				(begin
+					(if-not (nil? rusbdev) (close rusbdev))
+					(setq rusbdev nil)
+				)
 			)
 		)
 	)
@@ -634,25 +660,33 @@
 		(if (= (semaphore sid) 1)
 			(begin
 				(write_string_to_serial "d8 ff ff a0") ;; 温湿度 ，目前是广播，以后是用遍历所有短地址的精准方式进行查询
-				(sleep 1000)
-			)
-			(= (semaphore sid) 1)
-			(begin
-				(write_string_to_serial "a0") 
-				(sleep 1000)
-			)
-			(= (semaphore sid) 1)
-			(begin
-				(write_string_to_serial "d8 ff ff a6")
-				(sleep 30000);; pm25 sleep at least 30 seconds
-			)
-			
-			(= (semaphore sid) 1)
-			(begin
-				(write_string_to_serial "d8 ff ff a8")
+				(println "check temp")
 				(sleep 1000)
 			)
 		)
+		
+		;(if (= (semaphore sid) 1)
+		;	(begin
+		;		(write_string_to_serial "a0") 
+		;		(sleep 1000)
+		;	)
+		;)
+		
+		(if	(= (semaphore sid) 1)
+			(begin
+				(write_string_to_serial "d8 ff ff a6")
+				(println "check pm25")
+				(sleep 50000);; pm25 sleep at least 30 seconds
+			)
+		)
+		
+		(if	(= (semaphore sid) 1)
+			(begin
+				(write_string_to_serial "d8 ff ff a8") (println "check voc")
+				(sleep 1000)
+			)
+		)
+		
 		
 		(sleep (* 10 1000));; 间隔
 		(++ sleep_time)
