@@ -6,6 +6,7 @@
 ;;处理数据，很多处据是没用的，openwrt只接收认为需要的数据
 
 ;; 策略是无序的，因为策略不是一个人，是多个人，任务永远是平行的，要说顺序也只能根据策略中的延时来决定谁先谁后了。
+;; 节点数据格式是 一个list ("短地址" "Mac地址" "别的栏“）
 
 (constant 'PORT1 8085)
 (constant 'PORT2 8086)
@@ -46,6 +47,7 @@
 (set 'talk (share))     (share talk 0)
 (set 'content (share))  (share content "")
 (setq going (share))  (share going nil) ;; 策略用一个share going来标识此时，是否有人工的数据进行输入，要避开和人工命令一起输入
+(setq base_in_mem (share)) ;; 存放 所有数据，用共享内存的方式，减少磁盘操作
 
 (set 'sid (semaphore))
 (semaphore sid 1);;默认不是0 
@@ -66,9 +68,94 @@
 	(new Tree 'BASE);基本策略，永远在执行得到基本环境信息的功能
 )
 
+(define (do_plot arg_file)	
+	;(setq PLUGIN_NAME "voc")
+	;; store whatever the plugin defined ,the name"test_plugin_data should be unique, because this is like a namespace, newlisp has no sub namspace except under MAIN
+	;(setq my_sec_name "argscmd")
+	;(setq arg_file (string "rules/" PLUGIN_NAME ".arg"))
+	
+	(set 'in-file (open arg_file "read"))
+	(if (not (nil? in-file))
+		(setq abc (read-line in-file))
+	)
+	(while (not (nil? abc))
+					(if (and  (starts-with (current-line) "[") (ends-with (current-line) "]"));; means [xxx] style 
+						(begin
+							(setq section_name (slice (chop (current-line) 1 ) 1 ) )
+						;	(MAIN:assert "section name " section_name "\n")
+							(if (= section_name my_sec_name)
+								(begin
+									(setq data (read-line in-file))
+									(if (nil? data) (setq data ""))
+									
+									(while (and (not (nil? data)) (not (starts-with  data "[" ))  )
+										(parse_cmd data)
+										
+										(setq data (read-line in-file))
+									)
+								;	(MAIN:assert "do my_sec_name over")
+								)
+							)
+						)
+						(setq abc (read-line in-file))
+					)					
+		;(sleep (* 1000 10))		
+	)
+);;ends
+
+(define (parse_cmd cmd_str)
+	(if (starts-with cmd_str "CMD")
+		(begin
+			(setq tmp (parse cmd_str "#"))
+			(if (> (length tmp) 1)
+				(begin
+					(setq cmdstr (nth 1 tmp))
+					(setq dblist (plugin_data))
+				;	(MAIN:assert dblist "\n")
+					(dolist (x dblist)
+						(if (find (nth 0 x) cmdstr) 
+							(begin
+									(replace (nth 0 x) cmdstr (string (nth 1 x)));; 在之前已经处理好 DEV=XXXX 的真值了
+							)
+						)
+					)
+					;(MAIN:assert cmdstr)
+					;; 其实在执行之前，必须要得到执行的许可
+					(if (lambda? MAIN:write_string_to_serial)
+					(begin 
+						(assert cmdstr "\n")
+						;(eval-string cmdstr)
+					))
+					
+					(sleep 300);every time executed a serial command ,sleep 1s 
+				)
+			)
+		)
+		(find "=" cmd_str)
+		(begin
+			(setq tmp (parse cmd_str "="))
+			(if (> (length tmp) 1)
+				(begin
+					
+					(if (starts-with (nth 0 tmp) "DEV");; only handle DEV* 
+							(begin
+								(if (not (nil? (MAIN:BASE (string (nth 1 tmp) ))))
+									(plugin_data (nth 0 tmp)  (MAIN:BASE (string (nth 1 tmp))) );; store to the Tree 
+									(plugin_data (nth 0 tmp)  0 )
+								)
+							)
+							(plugin_data (nth 0 tmp)  (nth 1 tmp))
+					) 
+					
+				)
+			)
+		)
+	)
+)
+
 (define (hextostring hex_buf); xxxxxxx to xx xx xx xx
 	(setq nr (length hex_buf))
-	(assert "hextostring length: " nr "\n")
+	;(assert "hextostring length: " nr "\n")
 	(setq ret nil)
 	(setq dupstr (dup "b " nr))
 	
@@ -247,7 +334,7 @@
 	(if (or (= ostype "Win32") (= ostype "Cygwin")) ;;串口配置指令
 		(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " -ixon -icanon  min 0 time 30") )
 		;(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " -ignbrk -brkint -igncr －ignpar -imaxbel -opost -onlcr -isig -icanon -iexten -echo -echoe -echok -echoctl -echoke noflsh   min 150 time 1"))
-		(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " raw min 150 time 1"))
+		(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " raw min 250 time 3")) ;; 300ms 的timeout,timeout设的越大，一次可以读的数据越多，但是数据之间的时间间隔也就要设的更长，必须大于这个timeout
 	)
 	(exec serial_port_setting)
 )
@@ -275,7 +362,7 @@
 )
 
 ;;;憨豆呆他
-(define (hanle_serial_data data);; 处理来自串口的数据，基本上就是得到数据，存入数据库，就这样，很重要的核心功能
+(define (handle_serial_data data);; 处理来自串口的数据，基本上就是得到数据，存入数据库，就这样，很重要的核心功能
 ;; 要处理的data,可能是一只数据，也可能是几只数据粘在一条数据链上发过来的，例如，温度或是温度+湿度
 ;; 每个数据除了唯一性的数据头之外，还必须带上发出设备的短地址，以区别是哪个房间的数据
 ;; 数据结构永远是 头+短地址+内容
@@ -288,57 +375,94 @@
 	
 	
 	(while (< pos len)
-		(cond
-			((and (= (char (nth pos data))  0xa0) (< (+ pos 4) len)) ;; 温度,并且长度超过当前位置 2 个单位
+		
+			(if 
+				(and (< pos len) (= (char (nth pos data))  0x06) (< (+ pos 2) len)) ;; panid，从和openwrt连着的zigbee获得
+				(begin
+					(setq panid (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))))
+					(if (not (nil? (BASE "PANID")))
+							(BASE "PANID2" panid)
+							(BASE "PANID"  panid)
+					)
+					(share base_in_mem (BASE))
+					(setq pos (+ pos 3))
+				)
+				(and (< pos len) (= (char (nth pos data))  0xa0) (< (+ pos 4) len)) ;; 温度,并且长度超过当前位置 2 个单位
 				(begin
 					(setq tmp nil)
 					(setq short_address nil)
-					(setq short_address (format "%04X" (get-int (reverse (slice data pos 2)))))
+					(setq short_address (slice (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))) 0 4))
 					
 					;(setq tmp (| (<< (char (nth (+ pos 3) data) ) 8 ) (char (nth (+ pos 4) data) ) ) )
 					(setq tmp (get-int (slice data 2 2)))
-					(BASE (string  (slice short_address 0 4) "_TEMP") (int tmp))
+					(BASE (string  short_address "_TEMP") (int tmp))
 					(save "base.lsp" 'BASE)
+					(share base_in_mem (BASE))
 					(setq pos (+ pos 5))
 				)
-			)
- 			((and (= (char (nth pos data))  0xa1) (< (+ pos 4) len)) ;; 温度,并且长度超过当前位置 2 个单位
+				(and (< pos len) (= (char (nth pos data))  0xa1) (< (+ pos 4) len)) ;; 温度,并且长度超过当前位置 2 个单位
 				(begin
-				(setq tmp nil)
-				(setq short_address nil)
-				(setq short_address (format "%04X" (get-int (reverse (slice data pos 2)))))
-				(setq tmp (get-int (reverse (slice data 2 2))))
-				(BASE (string  (slice short_address 0 4) "_HUMI") (int tmp));; humidity 
-				(save "base.lsp" 'BASE)
-				(setq pos (+ pos 4))
+					(setq tmp nil)
+					(setq short_address nil)	
+					(setq short_address (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))))
+					(setq tmp (get-int (reverse (slice data 2 2))))
+					(BASE (string  (slice short_address 0 4) "_HUMI") (int tmp));; humidity 
+					(share base_in_mem (BASE))
+					(setq pos (+ pos 5))
 				)
-			)		
-			((and (= (char (nth pos data))  0x02) (< (+ pos 2) len)) ;;;取子节点短地址
+					
+			(and (< pos len) (= (char (nth pos data))  0x02) (< (+ pos 10) len)) ;;;取子节点短地址0x02 xx xx mm mm mmm mmmmmmmmmm.,0x02+短地址+Mac地址
 			(begin
 				(setq short_address nil)
-				(setq short_address (format "%04X" (get-int (reverse (slice data pos 2)))))
+				(setq short_address (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))))
+				(setq mac_address (hextostring (slice data (+ pos 3) 8))) 
 				(setq sa_string (slice short_address 0 4))
+				(setq ma_string (slice mac_address 0 8))
 				
 				(if (nil? (BASE "NODES"))
 					(begin
-						(BASE "NODES" (list sa_string))
+						(BASE "NODES" (list (list ma_string (list "shortaddress" sa_string))))
+						(share base_in_mem (BASE))
 					)
 					(not (nil? (BASE "NODES")))
 					(begin
-						(if (not (find sa_string (BASE "NODES")))
-							(push sa_string (BASE "NODES"))
+						(setq was_find -1)
+						(setq match_ele nil)
+						(dolist (w (BASE "NODES") (if (find ma_string w) (begin (setq match_ele w) (setq  was_find $idx))) ) )
+							
+						(if (= was_find -1)
+							(begin
+								(push (list ma_string  (list "shortaddress" sa_string)) (BASE "NODES"))
+								(while (!= (length (share base_in_mem)) (length (BASE)) )
+										(share base_in_mem (BASE))
+								)
+							)
+							(> was_find -1);; 这个设备存在过了
+							(begin
+								(if (not (nil? match_ele))
+									(begin
+										(dolist (w match_ele) (if (find "shortaddress") (setq (nth $idx (nth was_find (BASE "NODES"))) (list "shortaddress" sa_string))))
+										(while (!= (length (share base_in_mem)) (length (BASE)) )
+											(share base_in_mem (BASE))
+										)
+									)
+								)
+							)
 						)
+						(setq was_find -1)
+						(setq match_ele nil)
 					)
 				)
-				(setq pos (+ pos 2))
-			))
+				(setq pos (+ pos 11))
+				(setq sa_string nil) (setq ma_string nil)
+			)
 			
-			((and (= (char (nth pos data))  0xa6) (< (+ pos 6) len)) ;;; 取pm25 a8 xx xx cc cc dd dd, c d is low and counter
+			(and (< pos len) (= (char (nth pos data))  0xa6) (< (+ pos 6) len)) ;;; 取pm25 a8 xx xx cc cc dd dd, c d is low and counter
 			(begin
 				(setq short_address nil)
-				(setq short_address (format "%04X" (get-int (reverse (slice data pos 2)))))
-				(setq tmp1 (get-int (reverse (slice data 2 2))))
-				(setq tmp2 (get-int (reverse (slice data 4 2))))
+				(setq short_address (slice (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))) 0 4))
+				(setq tmp1 (get-int (reverse (slice data 3 2))))
+				(setq tmp2 (get-int (reverse (slice data 5 2))))
 				(setq pm25_ratio (div tmp1 tmp2))
 				(if (<= pm25_ratio 0.008)
 						(setq tmp 0)
@@ -349,21 +473,23 @@
 						(and (> pm25_ratio 0.014) (<= pm25_ratio 0.40)) ;; pm25 太大了也是计算错误
 						(setq tmp 3)
 				) 
-				(BASE (string (slice short_address 0 4) "_PM25") (int tmp))
-				(setq pos (+ pos 10))
-			))
-			((and (= (char (nth pos data))  0xa8) (< (+ pos 3) len)) ;; 取 voc 有害气体数值， 数值范围只有 是 00 01 10 11 四种可能a8 xx xx ??
+				(BASE (string short_address "_PM25") (int tmp))
+				(share base_in_mem (BASE))
+				(setq pos (+ pos 7))
+			)
+			(and (< pos len) (= (char (nth pos data))  0xa8) (< (+ pos 3) len)) ;; 取 voc 有害气体数值， 数值范围只有 是 00 01 10 11 四种可能a8 xx xx ??
 			(begin
 				(setq short_address nil)
-				(setq short_address (format "%04X" (get-int (reverse (slice data pos 2)))))
+				(setq short_address (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))))
 				(setq tmp (get-int (nth (+ pos 3) data))	)
 				(if (nil? tmp) (setq tmp -1)
 				)
 				(BASE (string (slice short_address 0 4) "_VOC") (int tmp))
-				(setq pos (+ pos 3))			
-			))
+				(share base_in_mem (BASE))
+				(setq pos (+ pos 4))			
+			)
+			(++ pos);; 默认是一个一个加，一个个位的前进
 		)
-		(++ pos);; 默认是一个一个加，一个个位的前进
 	)
 	
 
@@ -605,7 +731,7 @@
 				;; 可能自动处理数据，比如Logger
 				;(if (> (length read_data) 0)
 					(assert "data:" (hextostring read_data ) " | " read_data "\n")
-					(hanle_serial_data  read_data)
+					(handle_serial_data  read_data)
 				;)
 				
 			)
@@ -654,73 +780,58 @@
 
 )
 
-(define (get_base_info) ;; 基本策略，一直不停的获得目前环境的数据，存入数据库
+(define (base_plot) ;; 基本策略，一直不停的获得目前环境的数据，存入数据库
 	(setq sleep_time 0)
+
+	(new Tree 'plugin_data)
+	
 	(while 1
-		(if (= (semaphore sid) 1)
+		
+		(dolist (u (share base_in_mem) 
+				(if (find "NODES" u)
+						(setq nlst (nth (- (length u) 1) u))
+						(find "PANID" u)
+						(setq panid (nth (- (length u) 1) u))
+						(find "PANID2" u)
+						(setq panid2 (nth (- (length u) 1) u))
+				)
+				)
+		)
+		(if (not (nil? panid))
 			(begin
-				(write_string_to_serial "d8 ff ff a0") ;; 温湿度 ，目前是广播，以后是用遍历所有短地址的精准方式进行查询
-				(println "check temp")
-				(sleep 1000)
+				(assert panid "\n")
+				(if (= (panid "FFFE"))
+					;;to be a coordinator
+				)
 			)
 		)
-		
-		;(if (= (semaphore sid) 1)
-		;	(begin
-		;		(write_string_to_serial "a0") 
-		;		(sleep 1000)
-		;	)
-		;)
-		
-		(if	(= (semaphore sid) 1)
+		(if (and (not (nil? nlst)) (> (length nlst) 0))
 			(begin
-				(write_string_to_serial "d8 ff ff a6")
-				(println "check pm25")
-				(sleep 50000);; pm25 sleep at least 30 seconds
+				(dolist (d nlst (if (and (find d "shortaddress") (> (length d) 1)) (setq dst_addr (nth 1 d))))
+				)
+				(if (not (nil? dst_addr))
+				)				
 			)
 		)
-		
-		(if	(= (semaphore sid) 1)
-			(begin
-				(write_string_to_serial "d8 ff ff a8") (println "check voc")
-				(sleep 1000)
+		(sleep 1000)
+		;;;策略
+	(setq rules_dir "rules")
+	(if (directory? rules_dir) ;; mean rules directory exsited
+		(begin
+			(setq lsp_lst (directory rules_dir "\\.arg") );; 后辍来个rules,其实就是标准的 newlisp 文件
+			(dolist (x lsp_lst)
+				(do_plot (string rules_dir "/" x)) ;; 必须正确，否则会出错，进程退出了,每个策略就是一个进程 
 			)
 		)
-		
-		
-		(sleep (* 10 1000));; 间隔
-		(++ sleep_time)
-		(if (> sleep_time 2);; 间隔次数
-			(begin
-				(write_string_to_serial "d8 ff ff 01");; 得到全部的子节点
-				(setq sleep_time 0)
-				(sleep 1000)
-			)
-			
-		)
-		(sleep (* 10 1000));; 间隔
+		;;不存在rules就不load进去
+	)		
+		(write_string_to_serial "50") ;; ping 
+		(sleep 300)
 	)
 )
 
 (signal SIGINT ctrlC-handler)
 
-(setq cpid3 (spawn 'base_p (get_base_info)))
-
-(setq rules_dir "rules")
-
-(define (load_rules)
-	(if (directory? rules_dir) ;; mean rules directory exsited
-		(begin
-			(setq lsp_lst (directory rules_dir "\\.rul") );; 后辍来个rules,其实就是标准的 newlisp 文件
-			(dolist (x lsp_lst)
-				(load (string rules_dir "/" x)) ;; 必须正确，否则会出错，进程退出了,每个策略就是一个进程 
-			)
-		)
-		;;不存在rules就不load进去
-	)
-)
-
-(sleep (* 1000 5))
-(load_rules)
+(setq cpid3 (spawn 'base_p (base_plot)))
 
 
