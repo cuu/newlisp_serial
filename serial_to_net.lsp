@@ -1,19 +1,19 @@
-;;³ÌĞòÉè¼ÆÊÇÃ»ÓĞÍË³öµÄ£¬ËùÒÔº¯ÊıµÄ·µ»ØÒª¼°Ê± ,º¯ÊıÓ¦¸ÃÖ»¿¼ÂÇÕıÈ·Çé¿ö, openwrt BARRIER BREAKER (Bleeding Edge, r34253)
-;;µ±newlispÍË³öÊ±£¬ËùÓĞÃ»ÓĞcloseµÄopen µÄhandle¶¼»á±» closeµô
-;;Ö÷ÒªÊÇopenwrtÏÂÃæÊ¹ÓÃµÄ
-;;¶à½ø³Ì²Ù×÷£¬²Ù×÷µÄ½á¹û£¬¿ÉÄÜ»áÁ÷Èë²»¶ÔµÄÈËÊÖÀï
-;;Éè¼Æ²»ÓÃ¿¼ÂÇË³ĞòµÄÊı¾İ£¬°Ñ¶ÁÀ´µÄÊı¾İ£¬ÒÀÕÕÊı¾İÍ·£¬½øĞĞ´¦Àí
-;;´¦ÀíÊı¾İ£¬ºÜ¶à´¦¾İÊÇÃ»ÓÃµÄ£¬openwrtÖ»½ÓÊÕÈÏÎªĞèÒªµÄÊı¾İ
+;;ç¨‹åºè®¾è®¡æ˜¯æ²¡æœ‰é€€å‡ºçš„ï¼Œæ‰€ä»¥å‡½æ•°çš„è¿”å›è¦åŠæ—¶ ,å‡½æ•°åº”è¯¥åªè€ƒè™‘æ­£ç¡®æƒ…å†µ, openwrt BARRIER BREAKER (Bleeding Edge, r34253)
+;;å½“newlispé€€å‡ºæ—¶ï¼Œæ‰€æœ‰æ²¡æœ‰closeçš„open çš„handleéƒ½ä¼šè¢« closeæ‰
+;;ä¸»è¦æ˜¯openwrtä¸‹é¢ä½¿ç”¨çš„
+;;å¤šè¿›ç¨‹æ“ä½œï¼Œæ“ä½œçš„ç»“æœï¼Œå¯èƒ½ä¼šæµå…¥ä¸å¯¹çš„äººæ‰‹é‡Œ
+;;è®¾è®¡ä¸ç”¨è€ƒè™‘é¡ºåºçš„æ•°æ®ï¼ŒæŠŠè¯»æ¥çš„æ•°æ®ï¼Œä¾ç…§æ•°æ®å¤´ï¼Œè¿›è¡Œå¤„ç†
+;;å¤„ç†æ•°æ®ï¼Œå¾ˆå¤šå¤„æ®æ˜¯æ²¡ç”¨çš„ï¼Œopenwrtåªæ¥æ”¶è®¤ä¸ºéœ€è¦çš„æ•°æ®
 
-;; ²ßÂÔÊÇÎŞĞòµÄ£¬ÒòÎª²ßÂÔ²»ÊÇÒ»¸öÈË£¬ÊÇ¶à¸öÈË£¬ÈÎÎñÓÀÔ¶ÊÇÆ½ĞĞµÄ£¬ÒªËµË³ĞòÒ²Ö»ÄÜ¸ù¾İ²ßÂÔÖĞµÄÑÓÊ±À´¾ö¶¨Ë­ÏÈË­ºóÁË¡£
-;; ½ÚµãÊı¾İ¸ñÊ½ÊÇ Ò»¸ölist ("¶ÌµØÖ·" "MacµØÖ·" "±ğµÄÀ¸¡°£©
+;; ç­–ç•¥æ˜¯æ— åºçš„ï¼Œå› ä¸ºç­–ç•¥ä¸æ˜¯ä¸€ä¸ªäººï¼Œæ˜¯å¤šä¸ªäººï¼Œä»»åŠ¡æ°¸è¿œæ˜¯å¹³è¡Œçš„ï¼Œè¦è¯´é¡ºåºä¹Ÿåªèƒ½æ ¹æ®ç­–ç•¥ä¸­çš„å»¶æ—¶æ¥å†³å®šè°å…ˆè°åäº†ã€‚
+;; èŠ‚ç‚¹æ•°æ®æ ¼å¼æ˜¯ ä¸€ä¸ªlist ("çŸ­åœ°å€" "Macåœ°å€" "åˆ«çš„æ â€œï¼‰
 
 (constant 'PORT1 8085)
 (constant 'PORT2 8086)
 (constant 'ReadMax 138)
 (constant 'SIGINT 2)
-(constant 'DEV0 "/dev/ttyUSB0")
-(constant 'DEV1 "/dev/ttyATH0")
+(constant 'DEV0 "/dev/ttyUSB0");; æµ‹è¯•æ—¶ç”¨usb
+(constant 'DEV1 "/dev/ttyATH0");; æ­£å¼ç‰ˆç”¨ä¸²å£
 
 (define (get-parent_id) (sys-info 6))
 (define (getpid) (sys-info 7))
@@ -27,7 +27,7 @@
 	(dolist (x (args))
 		(extend ret (string x))
 	)
-	(write 1 ret ) ;; Ç¿ÖÆÏÔÊ¾ÔÚstdoutÉÏ
+	(write 1 ret ) ;; å¼ºåˆ¶æ˜¾ç¤ºåœ¨stdoutä¸Š
 )
 
 (define (assertln)
@@ -46,26 +46,26 @@
 
 (set 'talk (share))     (share talk 0)
 (set 'content (share))  (share content "")
-(setq going (share))  (share going nil) ;; ²ßÂÔÓÃÒ»¸öshare goingÀ´±êÊ¶´ËÊ±£¬ÊÇ·ñÓĞÈË¹¤µÄÊı¾İ½øĞĞÊäÈë£¬Òª±Ü¿ªºÍÈË¹¤ÃüÁîÒ»ÆğÊäÈë
-(setq base_in_mem (share)) ;; ´æ·Å ËùÓĞÊı¾İ£¬ÓÃ¹²ÏíÄÚ´æµÄ·½Ê½£¬¼õÉÙ´ÅÅÌ²Ù×÷
+(setq going (share))  (share going nil) ;; ç­–ç•¥ç”¨ä¸€ä¸ªshare goingæ¥æ ‡è¯†æ­¤æ—¶ï¼Œæ˜¯å¦æœ‰äººå·¥çš„æ•°æ®è¿›è¡Œè¾“å…¥ï¼Œè¦é¿å¼€å’Œäººå·¥å‘½ä»¤ä¸€èµ·è¾“å…¥
+(setq base_in_mem (share)) ;; å­˜æ”¾ æ‰€æœ‰æ•°æ®ï¼Œç”¨å…±äº«å†…å­˜çš„æ–¹å¼ï¼Œå‡å°‘ç£ç›˜æ“ä½œ
 
 (set 'sid (semaphore))
-(semaphore sid 1);;Ä¬ÈÏ²»ÊÇ0 
+(semaphore sid 1);;é»˜è®¤ä¸æ˜¯0 
 
 (global 'cmd_line)
 (setq cmd_line nil)
 
-(if (or (= ostype "Win32") (= ostype "Cygwin")) ;;Éè¶¨Éè±¸Ãû³Æ£¬ÖÁÓÚS10£¬Ò²Î´±ØÒ»¶¨ÊÇS10,¾ßÌåÊÓcygwin»·¾³
+(if (or (= ostype "Win32") (= ostype "Cygwin")) ;;è®¾å®šè®¾å¤‡åç§°ï¼Œè‡³äºS10ï¼Œä¹Ÿæœªå¿…ä¸€å®šæ˜¯S10,å…·ä½“è§†cygwinç¯å¢ƒ
 	(setq dev "/dev/ttyS10") ;; on win32 with cygwin!
 	(setq dev DEV0) ;; all linux platform,espcially in openwrt 
 )
 
-(setq dev1 DEV1);; Õâ¶ùÃ»ÓĞ¿¼ÂÇwinÁË
+(setq dev1 DEV1);; è¿™å„¿æ²¡æœ‰è€ƒè™‘winäº†
 
-;;; load²ßÂÔÎÄ¼ş
+;;; loadç­–ç•¥æ–‡ä»¶
 (if (file? "base.lsp")
 	(load "base.lsp")
-	(new Tree 'BASE);»ù±¾²ßÂÔ£¬ÓÀÔ¶ÔÚÖ´ĞĞµÃµ½»ù±¾»·¾³ĞÅÏ¢µÄ¹¦ÄÜ
+	(new Tree 'BASE);åŸºæœ¬ç­–ç•¥ï¼Œæ°¸è¿œåœ¨æ‰§è¡Œå¾—åˆ°åŸºæœ¬ç¯å¢ƒä¿¡æ¯çš„åŠŸèƒ½
 )
 
 (define (do_plot arg_file)	
@@ -115,12 +115,12 @@
 					(dolist (x dblist)
 						(if (find (nth 0 x) cmdstr) 
 							(begin
-									(replace (nth 0 x) cmdstr (string (nth 1 x)));; ÔÚÖ®Ç°ÒÑ¾­´¦ÀíºÃ DEV=XXXX µÄÕæÖµÁË
+									(replace (nth 0 x) cmdstr (string (nth 1 x)));; åœ¨ä¹‹å‰å·²ç»å¤„ç†å¥½ DEV=XXXX çš„çœŸå€¼äº†
 							)
 						)
 					)
 					;(MAIN:assert cmdstr)
-					;; ÆäÊµÔÚÖ´ĞĞÖ®Ç°£¬±ØĞëÒªµÃµ½Ö´ĞĞµÄĞí¿É
+					;; å…¶å®åœ¨æ‰§è¡Œä¹‹å‰ï¼Œå¿…é¡»è¦å¾—åˆ°æ‰§è¡Œçš„è®¸å¯
 					(if (lambda? MAIN:write_string_to_serial)
 					(begin 
 						(assert cmdstr "\n")
@@ -153,6 +153,22 @@
 	)
 )
 
+(define (stringtohex str)
+        (setq len (length str))
+        (setq pos 0)
+        (setq ret nil)
+        (while (< pos len)
+                (setq tmp (slice str pos 2))
+                (extend ret (string (int tmp 0 16)))
+                (extend ret " ")
+                (++ pos) (++ pos)
+        )
+        (setq dup_str (dup "b " (/ len 2)))
+        (setq pack_str (string "(pack \"" dup_str "\" " ret ")"))
+        (setq ret (eval-string pack_str))
+        ret
+)
+
 (define (hextostring hex_buf); xxxxxxx to xx xx xx xx
 	(setq nr (length hex_buf))
 	;(assert "hextostring length: " nr "\n")
@@ -180,7 +196,7 @@
 	(setq ret nil)
 	
 	(dolist (x (parse str " "))
-		(extend ret (pack "b" (int (char x) 0 16)) );; char º¯ÊıÖ»ÄÜ´¦Àí xx, ¶àÁËx²»´¦Àí
+		(extend ret (pack "b" (int (char x) 0 16)) );; char å‡½æ•°åªèƒ½å¤„ç† xx, å¤šäº†xä¸å¤„ç†
 	)
 	ret
 )
@@ -188,14 +204,14 @@
 (define (make_serial_cmd cmd str)
 	(setq cmd_line nil)
 	
-	(if (and (not (nil? cmd)) (not (nil? str)) ) ;; ÓĞÃüÁî£¬²¢ÇÒ´øÁË²ÎÊı
+	(if (and (not (nil? cmd)) (not (nil? str)) ) ;; æœ‰å‘½ä»¤ï¼Œå¹¶ä¸”å¸¦äº†å‚æ•°
 		(begin
 			(cond	
-				((= (trim cmd ) "AT+PING");; AT+PING=XX XX,ËäÈ»pingÒ»¸öÒÑÖªÁË¶ÌµØÖ·µÄÉè±¸¿´ÉÏÈ¥ºÜÃ»ÒâÒå£¬Õâ¾ÍÊÇÎªÁË¼ì²éÕâ¸öÉè±¸ÊÇ·ñ»î×Å£¬Ã»ÓĞ»µ¡£
+				((= (trim cmd ) "AT+PING");; AT+PING=XX XX,è™½ç„¶pingä¸€ä¸ªå·²çŸ¥äº†çŸ­åœ°å€çš„è®¾å¤‡çœ‹ä¸Šå»å¾ˆæ²¡æ„ä¹‰ï¼Œè¿™å°±æ˜¯ä¸ºäº†æ£€æŸ¥è¿™ä¸ªè®¾å¤‡æ˜¯å¦æ´»ç€ï¼Œæ²¡æœ‰åã€‚
 					(if (list? str);;
 						(begin
 							(setq t1 (parse (str 0) " "))
-							(if (= (length t1) 2) ;; ÑÏ¸ñÏŞÖÆÊäÈëµÄ¸ñÊ½£¬±ØĞëÎª xx xx,Ö»ÓĞÒ»¸ö¿Õ¸ñ£¬²»ÄÜÓĞ¶àÓàµÄ¿Õ¸ñ
+							(if (= (length t1) 2) ;; ä¸¥æ ¼é™åˆ¶è¾“å…¥çš„æ ¼å¼ï¼Œå¿…é¡»ä¸º xx xx,åªæœ‰ä¸€ä¸ªç©ºæ ¼ï¼Œä¸èƒ½æœ‰å¤šä½™çš„ç©ºæ ¼
 								(setq cmd_line (string (str 0) " 70 69 6e 67"))
 							)
 						)
@@ -270,11 +286,11 @@
 
 			)
 		)
-		(and (not (nil? cmd)) (nil? str)) ;; ±íÊ¾Ö»ÓĞÃüÁî£¬Ã»ÓĞ²ÎÊı
+		(and (not (nil? cmd)) (nil? str)) ;; è¡¨ç¤ºåªæœ‰å‘½ä»¤ï¼Œæ²¡æœ‰å‚æ•°
 		(begin
 			(assert "only cmd \n")
 			(cond 
-				((= (trim cmd ) "AT+PING") ;; Ã»ÓĞ²ÎÊı£¬¾Í±íÊ¾ÊÇ·¢¸ø´®¿ÚµÄ£¬²»ÊÇ·¢ÏòÍøÂçÖĞÄ³Éè±¸
+				((= (trim cmd ) "AT+PING") ;; æ²¡æœ‰å‚æ•°ï¼Œå°±è¡¨ç¤ºæ˜¯å‘ç»™ä¸²å£çš„ï¼Œä¸æ˜¯å‘å‘ç½‘ç»œä¸­æŸè®¾å¤‡
 						(setq cmd_line (string "70 69 6e 67"))
 				)
 				((= (trim cmd) "AT&ROUTER")
@@ -330,11 +346,11 @@
 
 
 (define (set_serial dev_str)
-	(setq baud 38400) ;;²¨ÌØÂÊ
-	(if (or (= ostype "Win32") (= ostype "Cygwin")) ;;´®¿ÚÅäÖÃÖ¸Áî
-		(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " -ixon -icanon  min 0 time 30") )
-		;(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " -ignbrk -brkint -igncr £­ignpar -imaxbel -opost -onlcr -isig -icanon -iexten -echo -echoe -echok -echoctl -echoke noflsh   min 150 time 1"))
-		(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " raw min 250 time 3")) ;; 300ms µÄtimeout,timeoutÉèµÄÔ½´ó£¬Ò»´Î¿ÉÒÔ¶ÁµÄÊı¾İÔ½¶à£¬µ«ÊÇÊı¾İÖ®¼äµÄÊ±¼ä¼ä¸ôÒ²¾ÍÒªÉèµÄ¸ü³¤£¬±ØĞë´óÓÚÕâ¸ötimeout
+	(setq baud 38400) ;;æ³¢ç‰¹ç‡
+	(if (or (= ostype "Win32") (= ostype "Cygwin")) ;;ä¸²å£é…ç½®æŒ‡ä»¤
+		(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " -ixon -icanon  min 2 time 0") )
+		;(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " -ignbrk -brkint -igncr ï¼ignpar -imaxbel -opost -onlcr -isig -icanon -iexten -echo -echoe -echok -echoctl -echoke noflsh   min 150 time 1"))
+		(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " raw min 1 time 0")) ;;æœ€å°‘2ä¸ªå­—èŠ‚ï¼Œä¸€ä¸ªè‚¯å®šæ˜¯é•¿åº¦å­—èŠ‚ï¼Œå¦ä¸€ä¸ªè‚¯å®šæ˜¯æ•°æ‰€å¤´å­—èŠ‚ï¼Œè¿˜æœ‰æ•°æ®å†…å®¹å­—èŠ‚ï¼Œå¯èƒ½æ˜¯0ï¼Œæ—¶é—´æ— é™ä¸€ç›´ç­‰å¾…
 	)
 	(exec serial_port_setting)
 )
@@ -361,13 +377,13 @@
     (write_serial ret (length ret))
 )
 
-;;;º©¶¹´ôËû
-(define (handle_serial_data data);; ´¦ÀíÀ´×Ô´®¿ÚµÄÊı¾İ£¬»ù±¾ÉÏ¾ÍÊÇµÃµ½Êı¾İ£¬´æÈëÊı¾İ¿â£¬¾ÍÕâÑù£¬ºÜÖØÒªµÄºËĞÄ¹¦ÄÜ
-;; Òª´¦ÀíµÄdata,¿ÉÄÜÊÇÒ»Ö»Êı¾İ£¬Ò²¿ÉÄÜÊÇ¼¸Ö»Êı¾İÕ³ÔÚÒ»ÌõÊı¾İÁ´ÉÏ·¢¹ıÀ´µÄ£¬ÀıÈç£¬ÎÂ¶È»òÊÇÎÂ¶È+Êª¶È
-;; Ã¿¸öÊı¾İ³ıÁËÎ¨Ò»ĞÔµÄÊı¾İÍ·Ö®Íâ£¬»¹±ØĞë´øÉÏ·¢³öÉè±¸µÄ¶ÌµØÖ·£¬ÒÔÇø±ğÊÇÄÄ¸ö·¿¼äµÄÊı¾İ
-;; Êı¾İ½á¹¹ÓÀÔ¶ÊÇ Í·+¶ÌµØÖ·+ÄÚÈİ
-;; ÔÚÊı¾İ¿âÖĞ£¬Ã¿¸öÊı¾İÊÇÒÔ£º¶ÌµØÖ·_Êı¾İÃû³Æ ÕâÑùµÄkey´æÔÚ 
-;; ËùÓĞ¶ÌµØÖ·£¨Éè±¸£©µÄËØÒıÔòÊÇÃû³ÆÎª ALL_DEV µÄkey
+;;;æ†¨è±†å‘†ä»–
+(define (handle_serial_data data);; å¤„ç†æ¥è‡ªä¸²å£çš„æ•°æ®ï¼ŒåŸºæœ¬ä¸Šå°±æ˜¯å¾—åˆ°æ•°æ®ï¼Œå­˜å…¥æ•°æ®åº“ï¼Œå°±è¿™æ ·ï¼Œå¾ˆé‡è¦çš„æ ¸å¿ƒåŠŸèƒ½
+;; è¦å¤„ç†çš„data,å¯èƒ½æ˜¯ä¸€åªæ•°æ®ï¼Œä¹Ÿå¯èƒ½æ˜¯å‡ åªæ•°æ®ç²˜åœ¨ä¸€æ¡æ•°æ®é“¾ä¸Šå‘è¿‡æ¥çš„ï¼Œä¾‹å¦‚ï¼Œæ¸©åº¦æˆ–æ˜¯æ¸©åº¦+æ¹¿åº¦
+;; æ¯ä¸ªæ•°æ®é™¤äº†å”¯ä¸€æ€§çš„æ•°æ®å¤´ä¹‹å¤–ï¼Œè¿˜å¿…é¡»å¸¦ä¸Šå‘å‡ºè®¾å¤‡çš„çŸ­åœ°å€ï¼Œä»¥åŒºåˆ«æ˜¯å“ªä¸ªæˆ¿é—´çš„æ•°æ®
+;; æ•°æ®ç»“æ„æ°¸è¿œæ˜¯ å¤´+çŸ­åœ°å€+å†…å®¹
+;; åœ¨æ•°æ®åº“ä¸­ï¼Œæ¯ä¸ªæ•°æ®æ˜¯ä»¥ï¼šçŸ­åœ°å€_æ•°æ®åç§° è¿™æ ·çš„keyå­˜åœ¨ 
+;; æ‰€æœ‰çŸ­åœ°å€ï¼ˆè®¾å¤‡ï¼‰çš„ç´ å¼•åˆ™æ˜¯åç§°ä¸º ALL_DEV çš„key
 
 	(setq len 0)
 	(setq pos 0)
@@ -377,17 +393,22 @@
 	(while (< pos len)
 		
 			(if 
-				(and (< pos len) (= (char (nth pos data))  0x06) (< (+ pos 2) len)) ;; panid£¬´ÓºÍopenwrtÁ¬×ÅµÄzigbee»ñµÃ
+				(and (< pos len) (= (char (nth pos data))  0x06) (< (+ pos 2) len)) ;; panidï¼Œä»å’Œopenwrtè¿ç€çš„zigbeeè·å¾—
 				(begin
-					(setq panid (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))))
+					(setq panid (slice (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))) 0 4))
 					(if (not (nil? (BASE "PANID")))
-							(BASE "PANID2" panid)
-							(BASE "PANID"  panid)
+							(if (= (BASE "PANID") "FFFE")
+								(BASE "PANID" panid)
+								(!= (BASE "PANID" "FFFE"))
+								(BASE "PANID2"  panid)
+							)
+							(nil? (BASE "PANID"))
+								(BASE "PANID" panid)
 					)
 					(share base_in_mem (BASE))
 					(setq pos (+ pos 3))
 				)
-				(and (< pos len) (= (char (nth pos data))  0xa0) (< (+ pos 4) len)) ;; ÎÂ¶È,²¢ÇÒ³¤¶È³¬¹ıµ±Ç°Î»ÖÃ 2 ¸öµ¥Î»
+				(and (< pos len) (= (char (nth pos data))  0xa0) (< (+ pos 4) len)) ;; æ¸©åº¦,å¹¶ä¸”é•¿åº¦è¶…è¿‡å½“å‰ä½ç½® 2 ä¸ªå•ä½
 				(begin
 					(setq tmp nil)
 					(setq short_address nil)
@@ -400,7 +421,7 @@
 					(share base_in_mem (BASE))
 					(setq pos (+ pos 5))
 				)
-				(and (< pos len) (= (char (nth pos data))  0xa1) (< (+ pos 4) len)) ;; ÎÂ¶È,²¢ÇÒ³¤¶È³¬¹ıµ±Ç°Î»ÖÃ 2 ¸öµ¥Î»
+				(and (< pos len) (= (char (nth pos data))  0xa1) (< (+ pos 4) len)) ;; æ¸©åº¦,å¹¶ä¸”é•¿åº¦è¶…è¿‡å½“å‰ä½ç½® 2 ä¸ªå•ä½
 				(begin
 					(setq tmp nil)
 					(setq short_address nil)	
@@ -411,7 +432,7 @@
 					(setq pos (+ pos 5))
 				)
 					
-			(and (< pos len) (= (char (nth pos data))  0x02) (< (+ pos 10) len)) ;;;È¡×Ó½Úµã¶ÌµØÖ·0x02 xx xx mm mm mmm mmmmmmmmmm.,0x02+¶ÌµØÖ·+MacµØÖ·
+			(and (< pos len) (= (char (nth pos data))  0x02) (< (+ pos 10) len)) ;;;å–å­èŠ‚ç‚¹çŸ­åœ°å€0x02 xx xx mm mm mmm mmmmmmmmmm.,0x02+çŸ­åœ°å€+Macåœ°å€
 			(begin
 				(setq short_address nil)
 				(setq short_address (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))))
@@ -437,7 +458,7 @@
 										(share base_in_mem (BASE))
 								)
 							)
-							(> was_find -1);; Õâ¸öÉè±¸´æÔÚ¹ıÁË
+							(> was_find -1);; è¿™ä¸ªè®¾å¤‡å­˜åœ¨è¿‡äº†
 							(begin
 								(if (not (nil? match_ele))
 									(begin
@@ -457,7 +478,7 @@
 				(setq sa_string nil) (setq ma_string nil)
 			)
 			
-			(and (< pos len) (= (char (nth pos data))  0xa6) (< (+ pos 6) len)) ;;; È¡pm25 a8 xx xx cc cc dd dd, c d is low and counter
+			(and (< pos len) (= (char (nth pos data))  0xa6) (< (+ pos 6) len)) ;;; å–pm25 a8 xx xx cc cc dd dd, c d is low and counter
 			(begin
 				(setq short_address nil)
 				(setq short_address (slice (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))) 0 4))
@@ -470,14 +491,14 @@
 						(setq tmp 1)
 						(and (> pm25_ratio 0.01 ) (<= pm25_ratio 0.14))
 						(setq tmp 2)
-						(and (> pm25_ratio 0.014) (<= pm25_ratio 0.40)) ;; pm25 Ì«´óÁËÒ²ÊÇ¼ÆËã´íÎó
+						(and (> pm25_ratio 0.014) (<= pm25_ratio 0.40)) ;; pm25 å¤ªå¤§äº†ä¹Ÿæ˜¯è®¡ç®—é”™è¯¯
 						(setq tmp 3)
 				) 
 				(BASE (string short_address "_PM25") (int tmp))
 				(share base_in_mem (BASE))
 				(setq pos (+ pos 7))
 			)
-			(and (< pos len) (= (char (nth pos data))  0xa8) (< (+ pos 3) len)) ;; È¡ voc ÓĞº¦ÆøÌåÊıÖµ£¬ ÊıÖµ·¶Î§Ö»ÓĞ ÊÇ 00 01 10 11 ËÄÖÖ¿ÉÄÜa8 xx xx ??
+			(and (< pos len) (= (char (nth pos data))  0xa8) (< (+ pos 3) len)) ;; å– voc æœ‰å®³æ°”ä½“æ•°å€¼ï¼Œ æ•°å€¼èŒƒå›´åªæœ‰ æ˜¯ 00 01 10 11 å››ç§å¯èƒ½a8 xx xx ??
 			(begin
 				(setq short_address nil)
 				(setq short_address (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))))
@@ -488,14 +509,14 @@
 				(share base_in_mem (BASE))
 				(setq pos (+ pos 4))			
 			)
-			(++ pos);; Ä¬ÈÏÊÇÒ»¸öÒ»¸ö¼Ó£¬Ò»¸ö¸öÎ»µÄÇ°½ø
+			(++ pos);; é»˜è®¤æ˜¯ä¸€ä¸ªä¸€ä¸ªåŠ ï¼Œä¸€ä¸ªä¸ªä½çš„å‰è¿›
 		)
 	)
 	
 
 )
 
-(define (tcp_8087) ;; tcp ½ø³Ì,×¨ÃÅ´¦Àí´®¿ÚÊı¾İ; ÔÚÕâ¶ùspawnÁË¼¸¸ö½ø³Ì£¬¹²Í¬´¦ÀíÈÎÎñ
+(define (tcp_8087) ;; tcp è¿›ç¨‹,ä¸“é—¨å¤„ç†ä¸²å£æ•°æ®; åœ¨è¿™å„¿spawnäº†å‡ ä¸ªè¿›ç¨‹ï¼Œå…±åŒå¤„ç†ä»»åŠ¡
 	
 	(while (!= (share talk) 19)
 		(set 'connection (net-accept server))
@@ -533,10 +554,10 @@
 							
 									(if (starts-with buff "AT+")
 										(begin
-										(dotimes (z 50 (= (share talk) 999)) (sleep 30) );; sleep Ô¼500ms¾Í½áÊøµÈ,Í¦ÂıµÄ£¬´®¿ÚµÄ·´Ó¦
+										(dotimes (z 50 (= (share talk) 999)) (sleep 30) );; sleep çº¦500mså°±ç»“æŸç­‰,æŒºæ…¢çš„ï¼Œä¸²å£çš„ååº”
 										(assert z " sleep over\n")
 										
-										(share talk 0);; Çå³ı ±êÖ¾£¬read processÓĞ·µ»ØÁË	
+										(share talk 0);; æ¸…é™¤ æ ‡å¿—ï¼Œread processæœ‰è¿”å›äº†	
 										(assert (share content) "\n")
 									
 										(net-send connection (share content))
@@ -573,7 +594,7 @@
 	)		
 )
 
-(define (tcp_8084) ;; tcp ½ø³Ì,Õâ¸öÖ÷ÒªÊÇÓÃÀ´½»»¥openwrtÉÏµÄÊı¾İ¿âÖ®Àà£¬±ÈÈç×´Ì¬±í£¬½Úµã±í£¬±ğÃû±í;; telnet ÓÃµÄ
+(define (tcp_8084) ;; tcp è¿›ç¨‹,è¿™ä¸ªä¸»è¦æ˜¯ç”¨æ¥äº¤äº’openwrtä¸Šçš„æ•°æ®åº“ä¹‹ç±»ï¼Œæ¯”å¦‚çŠ¶æ€è¡¨ï¼ŒèŠ‚ç‚¹è¡¨ï¼Œåˆ«åè¡¨;; telnet ç”¨çš„
 	(set 'listen (net-listen 8086))
 	
 	(unless (not (nil? listen)) 
@@ -626,7 +647,7 @@
 	)		
 )
 
-(define (tcp_8083) ;; tcp ½ø³Ì,×¨ÃÅ´¦Àí´®¿ÚÊı¾İ
+(define (tcp_8083) ;; tcp è¿›ç¨‹,ä¸“é—¨å¤„ç†ä¸²å£æ•°æ®
 	
 	(set 'listen (net-listen 8085))
 	
@@ -655,14 +676,14 @@
 							(semaphore sid -1)
 							
 							(setq abctimer 0)
-							(dotimes (z 50 (= (share talk) 999)) (setq abctimer z) (sleep 20) );; sleep Ô¼500ms¾Í½áÊøµÈ,Í¦ÂıµÄ£¬´®¿ÚµÄ·´Ó¦
+							(dotimes (z 50 (= (share talk) 999)) (setq abctimer z) (sleep 20) );; sleep çº¦500mså°±ç»“æŸç­‰,æŒºæ…¢çš„ï¼Œä¸²å£çš„ååº”
 							
 							(assert abctimer " times sleep over\n")
-							(share talk 0);; Çå³ı ±êÖ¾£¬read processÓĞ·µ»ØÁË
+							(share talk 0);; æ¸…é™¤ æ ‡å¿—ï¼Œread processæœ‰è¿”å›äº†
 							(assert (share content))
 							(assert "\n")
 							(net-send connection (share content))
-							(share content "") ;; Çå¿Õ£¬Èç¹û·¢ËÍ¹ı£¬¾ÍÇå¿Õ
+							(share content "") ;; æ¸…ç©ºï¼Œå¦‚æœå‘é€è¿‡ï¼Œå°±æ¸…ç©º
 							
 							;; here deal with data
 						)
@@ -683,40 +704,61 @@
     (setq ret nil)
     (setq nr nil)
 		(setq tmp nil)
-	;(setq fd (open dv "r"))
-			
-	;(if-not (nil? fd)
-	;	(begin
+
 			(setq nr (read fd buff 64))
 			
-			;(while (and (> nr 0) (not (nil? nr)))
-			(while (not (nil? nr))
-				(extend ret buff)
+			(extend ret buff)
+			
+			(if (> nr 0);; means readed sth
+			  (begin
+			  
+			    (cond 
+				((= (char (nth 0 ret)) 0x51);ç¡®ä¿é¦–ä¸ªæ•°æ®æ˜¯è¦å¤„ç†çš„æ•°æ®ï¼Œå› ä¸ºåªæœ‰è¦å¤„ç†çš„æ•°æ®ï¼Œæ‰èƒ½æœ‰ä½™ä¸‹æ›´å¤šçš„æ•°æ®å­˜åœ¨
+				 (begin
+				    (if (< nr 2);;æœ€å°‘è¦æœ‰ä¸¤ä¸ªæ•°æ®ï¼Œå¦‚æœæ„å¤–åªè¯»äº†ä¸€ä¸ªï¼Œå†è¯»ä¸€æ¬¡ï¼Œä¸€ä¸ª
+					(begin
+					  (setq nr (read fd buff 1))
+					  (extend ret buff)
+					)
+				    )
+				    (setq dlen (get-int (nth 1 ret)))
+				    (while (and (< (length ret) dlen) (> dlen 1))
+				      (setq nr (read fd buff (- dlen (length ret)) ));;ç²¾ç¡®è¯»ï¼Œä¸å¤šè¯»ä¸‹ä¸€æ¡æ•°æ®
+				      (if (not (nil? nr)) (extend ret buff) )
+				    )
+				 )
+				)
+				
+				
+				
+			    )
+			  )
+			)
+			 
+			;(while (not (nil? nr))
+			;	(extend ret buff)
 				
 			;	(setq nr (peek fd))
 			;  (sleep 100)
-				(setq nr (peek fd))
+			;	(setq nr (peek fd))
 				;(if (> nr 0)
-					(setq nr (read fd buff (* nr 2) ))
+			;		(setq nr (read fd buff (+ nr 10) ))
 				;)
-			)
-			;(close fd)
-		;)
-	;)
+			;)
 	ret
 )
 
 
-(define (read_serial_process) ;;¶Á´®¿ÚµÄÈ¡³Ì,Æô¶¯Ê±£¬¿¼ÂÇÃ»ÓĞ½ø³ÌÕ¼ÓÃ /dev/ttyUSB0
+(define (read_serial_process) ;;è¯»ä¸²å£çš„å–ç¨‹,å¯åŠ¨æ—¶ï¼Œè€ƒè™‘æ²¡æœ‰è¿›ç¨‹å ç”¨ /dev/ttyUSB0,é¡ºä¾¿å¤„ç†ç­–ç•¥
 		
 	(while (not (= (share talk) 10000))
 		(if (file? dev)
 			(begin
-				;;´Ó´®¿Ú¶ÁÈ¡Êı¾İ
-				(if (nil? rusbdev);; Èç¹ûusbdev ÖØĞÂ²åÉÏÁË
+				;;ä»ä¸²å£è¯»å–æ•°æ®
+				(if (nil? rusbdev);; å¦‚æœusbdev é‡æ–°æ’ä¸Šäº†
 					(setq rusbdev (open dev "r"))
 				)
-				(setq read_data (read_serial rusbdev) ) ;; Õâ¶ù£¬Èç¹ûÁ¬½ÓÕı³££¬»áÓÀÔ¶µÈ´ıÊı¾İµÄ½øÀ´£¬Èç¹ûÍ»È»zigbee±»²¦µôÁË£¬Ò²»áÍË³öÀ´
+				(setq read_data (read_serial rusbdev) ) ;; è¿™å„¿ï¼Œå¦‚æœè¿æ¥æ­£å¸¸ï¼Œä¼šæ°¸è¿œç­‰å¾…æ•°æ®çš„è¿›æ¥ï¼Œå¦‚æœçªç„¶zigbeeè¢«æ‹¨æ‰äº†ï¼Œä¹Ÿä¼šé€€å‡ºæ¥
 				(assert "read_data length: " (length read_data) "\n")
 				;(sleep 100);;; make a delay to make sure data received
 				(if (= (share talk) 1)
@@ -728,14 +770,14 @@
 						(share talk 999)
 					)
 				)
-				;; ¿ÉÄÜ×Ô¶¯´¦ÀíÊı¾İ£¬±ÈÈçLogger
+				;; å¯èƒ½è‡ªåŠ¨å¤„ç†æ•°æ®ï¼Œæ¯”å¦‚Logger
 				;(if (> (length read_data) 0)
 					(assert "data:" (hextostring read_data ) " | " read_data "\n")
 					(handle_serial_data  read_data)
 				;)
 				
 			)
-			(if-not (file? dev)
+			(if-not (file? dev);;å¦‚æœçªç„¶ usbè®¾å¤‡è¢«æ‹¨æ‰ï¼Œè¿™å„¿å°±è¦æ¸…é™¤æ‰è¿™ä¸ªrusbdev
 				(begin
 					(if-not (nil? rusbdev) (close rusbdev))
 					(setq rusbdev nil)
@@ -745,7 +787,10 @@
 	)
 )
 
-
+(while (not  (file? dev))
+	(sleep 5000)
+	(println "waiting for device to be plugged")
+)
 (set_serial dev)
 ;; fork now
 (setq cpid1 (spawn 'read_p (read_serial_process)))
@@ -780,14 +825,16 @@
 
 )
 
-(define (base_plot) ;; »ù±¾²ßÂÔ£¬Ò»Ö±²»Í£µÄ»ñµÃÄ¿Ç°»·¾³µÄÊı¾İ£¬´æÈëÊı¾İ¿â
+(define (base_plot) ;; åŸºæœ¬ç­–ç•¥ï¼Œä¸€ç›´ä¸åœçš„è·å¾—ç›®å‰ç¯å¢ƒçš„æ•°æ®ï¼Œå­˜å…¥æ•°æ®åº“
 	(setq sleep_time 0)
 
 	(new Tree 'plugin_data)
 	
 	(while 1
 		
-		(dolist (u (share base_in_mem) 
+		(if (and (not (nil? (share base_in_mem))) (list? (share base_in_mem)))
+			(begin
+				(dolist (u (share base_in_mem) 
 				(if (find "NODES" u)
 						(setq nlst (nth (- (length u) 1) u))
 						(find "PANID" u)
@@ -796,15 +843,39 @@
 						(setq panid2 (nth (- (length u) 1) u))
 				)
 				)
-		)
-		(if (not (nil? panid))
-			(begin
-				(assert panid "\n")
-				(if (= (panid "FFFE"))
-					;;to be a coordinator
 				)
 			)
 		)
+		(silent(if 
+			(and (nil? panid) (nil? panid2))
+			(begin
+				(write_string_to_serial "05")
+			)
+			(and (not (nil? panid)) (nil? panid2))
+			(begin
+				(assert panid "\n")
+				(if (= panid "FFFE")
+					;;to be a coordinator
+					(begin
+						(write_string_to_serial "c0")
+					)
+				)
+			)
+			(and (not (nil? panid)) (not (nil? panid2)))
+			(begin
+				(if
+					(and (not (= panid "FFFE")) (not (= panid2 "FFFE")))
+					(begin
+						(if (!= panid panid2)
+							(begin		
+								(write_string_to_serial (string "70 " (slice panid 0 2) " " (slice panid 2 2)))
+								
+							)
+						)
+					)
+				)
+			)
+		))
 		(if (and (not (nil? nlst)) (> (length nlst) 0))
 			(begin
 				(dolist (d nlst (if (and (find d "shortaddress") (> (length d) 1)) (setq dst_addr (nth 1 d))))
@@ -814,16 +885,17 @@
 			)
 		)
 		(sleep 1000)
-		;;;²ßÂÔ
+		;;;ç­–ç•¥
 	(setq rules_dir "rules")
 	(if (directory? rules_dir) ;; mean rules directory exsited
 		(begin
-			(setq lsp_lst (directory rules_dir "\\.arg") );; ºóê¡À´¸örules,ÆäÊµ¾ÍÊÇ±ê×¼µÄ newlisp ÎÄ¼ş
+			(setq lsp_lst (directory rules_dir "\\.arg") );; åè¾æ¥ä¸ªrules,å…¶å®å°±æ˜¯æ ‡å‡†çš„ newlisp æ–‡ä»¶
 			(dolist (x lsp_lst)
-				(do_plot (string rules_dir "/" x)) ;; ±ØĞëÕıÈ·£¬·ñÔò»á³ö´í£¬½ø³ÌÍË³öÁË,Ã¿¸ö²ßÂÔ¾ÍÊÇÒ»¸ö½ø³Ì 
+				(do_plot (string rules_dir "/" x)) ;; å¿…é¡»æ­£ç¡®ï¼Œå¦åˆ™ä¼šå‡ºé”™ï¼Œè¿›ç¨‹é€€å‡ºäº†,æ¯ä¸ªç­–ç•¥å°±æ˜¯ä¸€ä¸ªè¿›ç¨‹ 
+				(sleep 400);;ç»™cc2530å¿…è¦çš„â€ä¼‘æ¯â€œæ—¶é—´
 			)
 		)
-		;;²»´æÔÚrules¾Í²»load½øÈ¥
+		;;ä¸å­˜åœ¨ruleså°±ä¸loadè¿›å»
 	)		
 		(write_string_to_serial "50") ;; ping 
 		(sleep 300)
