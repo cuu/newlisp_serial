@@ -52,8 +52,12 @@
 (set 'sid (semaphore))
 (semaphore sid 1);;默认不是0 
 
-(global 'cmd_line)
+
 (setq cmd_line nil)
+(global 'cmd_line)
+(setq read_buffer nil);;;
+(global 'read_buffer);;; The buffer like sscom32''s textarea, store all the results ,minapulated by functions.
+
 
 (if (or (= ostype "Win32") (= ostype "Cygwin")) ;;设定设备名称，至于S10，也未必一定是S10,具体视cygwin环境
 	(setq dev "/dev/ttyS10") ;; on win32 with cygwin!
@@ -377,143 +381,152 @@
     (write_serial ret (length ret))
 )
 
+;;; buffer must be at least two bytes
+;;; buffer len flag must be at least over 2
+;;; (length of buffer must be >= of buffer len flag
+
+(define (check_buffer_sum buffer, pos)
+	(setq pos 0)
+	
+	 (if (and (> (length buffer) 1) (> (char (slice buffer (+ pos 1) 1)) 2 ) (>= (length buffer) (char (slice buffer (+ pos 1) 1))))
+	 )
+)
 ;;;憨豆呆他
-(define (handle_serial_data data);; 处理来自串口的数据，基本上就是得到数据，存入数据库，就这样，很重要的核心功能
+(define (handle_serial_data);; 处理来自串口的数据，基本上就是得到数据，存入数据库，就这样，很重要的核心功能
 ;; 要处理的data,可能是一只数据，也可能是几只数据粘在一条数据链上发过来的，例如，温度或是温度+湿度
 ;; 每个数据除了唯一性的数据头之外，还必须带上发出设备的短地址，以区别是哪个房间的数据
 ;; 数据结构永远是 头+短地址+内容
 ;; 在数据库中，每个数据是以：短地址_数据名称 这样的key存在 
 ;; 所有短地址（设备）的素引则是名称为 ALL_DEV 的key
+;; use slice more than nth is safer
 
-	(setq len 0)
-	(setq pos 0)
-	(setq len (length data))
 	
+	(setq pos 0);; pos maybe forever be 0 
+	(setq handle_over_flag nil)
 	
-	(while (< pos len)
-		
-			(if 
-				(and (< pos len) (= (char (nth pos data))  0x06) (< (+ pos 2) len)) ;; panid，从和openwrt连着的zigbee获得
+	(while (nil? handle_over_flag)
+			(if  (true? (check_buffer_sum read_buffer)) ;; this checking  is for handle_over_flag
 				(begin
-					(setq panid (slice (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))) 0 4))
-					(if (not (nil? (BASE "PANID")))
-							(if (= (BASE "PANID") "FFFE")
-								(BASE "PANID" panid)
-								(!= (BASE "PANID" "FFFE"))
-								(BASE "PANID2"  panid)
-							)
-							(nil? (BASE "PANID"))
-								(BASE "PANID" panid)
-					)
-					(share base_in_mem (BASE))
-					(setq pos (+ pos 3))
-				)
-				(and (< pos len) (= (char (nth pos data))  0xa0) (< (+ pos 4) len)) ;; 温度,并且长度超过当前位置 2 个单位
-				(begin
-					(setq tmp nil)
-					(setq short_address nil)
-					(setq short_address (slice (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))) 0 4))
-					
-					;(setq tmp (| (<< (char (nth (+ pos 3) data) ) 8 ) (char (nth (+ pos 4) data) ) ) )
-					(setq tmp (get-int (slice data 2 2)))
-					(BASE (string  short_address "_TEMP") (int tmp))
-					(save "base.lsp" 'BASE)
-					(share base_in_mem (BASE))
-					(setq pos (+ pos 5))
-				)
-				(and (< pos len) (= (char (nth pos data))  0xa1) (< (+ pos 4) len)) ;; 温度,并且长度超过当前位置 2 个单位
-				(begin
-					(setq tmp nil)
-					(setq short_address nil)	
-					(setq short_address (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))))
-					(setq tmp (get-int (reverse (slice data 2 2))))
-					(BASE (string  (slice short_address 0 4) "_HUMI") (int tmp));; humidity 
-					(share base_in_mem (BASE))
-					(setq pos (+ pos 5))
-				)
-					
-			(and (< pos len) (= (char (nth pos data))  0x02) (< (+ pos 10) len)) ;;;取子节点短地址0x02 xx xx mm mm mmm mmmmmmmmmm.,0x02+短地址+Mac地址
-			(begin
-				(setq short_address nil)
-				(setq short_address (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))))
-				(setq mac_address (hextostring (slice data (+ pos 3) 8))) 
-				(setq sa_string (slice short_address 0 4))
-				(setq ma_string (slice mac_address 0 8))
-				
-				(if (nil? (BASE "NODES"))
-					(begin
-						(BASE "NODES" (list (list ma_string (list "shortaddress" sa_string))))
-						(share base_in_mem (BASE))
-					)
-					(not (nil? (BASE "NODES")))
-					(begin
-						(setq was_find -1)
-						(setq match_ele nil)
-						(dolist (w (BASE "NODES") (if (find ma_string w) (begin (setq match_ele w) (setq  was_find $idx))) ) )
-							
-						(if (= was_find -1)
+						(if
+							(and (= (char (nth pos read_buffer))  0x06)  (true? (check_buffer_sum read_buffer)) )  ;; panid，从和openwrt连着的zigbee获得 0x06 len pa id
 							(begin
-								(push (list ma_string  (list "shortaddress" sa_string)) (BASE "NODES"))
-								(while (!= (length (share base_in_mem)) (length (BASE)) )
-										(share base_in_mem (BASE))
+								(setq panid (slice (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))) 0 4))
+								(if (not (nil? (BASE "PANID")))
+									(if (= (BASE "PANID") "FFFE")
+										(BASE "PANID" panid)
+										(!= (BASE "PANID" "FFFE"))
+										(BASE "PANID2"  panid)
+									)
+								(nil? (BASE "PANID"))
+									(BASE "PANID" panid)
 								)
+								(share base_in_mem (BASE))
+					
+								(setq read_buffer (slice read_buffer  (char (nth (+ pos 1)  read_buffer) )))
 							)
-							(> was_find -1);; 这个设备存在过了
+							(and (= (char (nth pos read_buffer))  0xa0)  (true? (check_buffer_sum read_buffer)) )  ;; 温度, 0xa0 len xx xx tt tt
 							(begin
-								(if (not (nil? match_ele))
+								(setq tmp nil)
+								(setq short_address nil)
+								(setq short_address (slice (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))) 0 4)  )
+								(setq tmp (get-int (slice read_buffer (+ pos 4) 2)))
+								(BASE (string  short_address "_TEMP") (int tmp))
+								(save "base.lsp" 'BASE)
+								(share base_in_mem (BASE))
+								(setq read_buffer (slice read_buffer  (char (nth (+ pos 1)  read_buffer) )))
+							)
+							(and (= (char (nth pos read_buffer))  0xa1)  (true? (check_buffer_sum read_buffer)) ) ;; shi度,
+							(begin
+								(setq tmp nil)
+								(setq short_address nil)	
+								(setq short_address (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))) )
+								(setq tmp (get-int (reverse (slice read_buffer (+ pos 4) 2))))
+								(BASE (string  (slice short_address 0 4) "_HUMI") (int tmp));; humidity 
+								(share base_in_mem (BASE))
+								(setq read_buffer (slice read_buffer  (char (nth (+ pos 1)  read_buffer) )))
+							)
+					
+							(and (= (char (nth pos read_buffer))  0x02)   (true? (check_buffer_sum read_buffer)) );;;取子节点短地址0x02 len xx xx mmmmmmmm.,0x02+len+短地址+Mac地址
+							(begin
+								(setq short_address nil)
+								(setq short_address (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))))
+								(setq mac_address (hextostring (slice read_buffer (+ pos 4) 8))) 
+								(setq sa_string (slice short_address 0 4))
+								(setq ma_string (slice mac_address 0 8))
+				
+								(if (nil? (BASE "NODES"))
 									(begin
-										(dolist (w match_ele) (if (find "shortaddress") (setq (nth $idx (nth was_find (BASE "NODES"))) (list "shortaddress" sa_string))))
-										(while (!= (length (share base_in_mem)) (length (BASE)) )
+										(BASE "NODES" (list (list ma_string (list "shortaddress" sa_string))))
+										(share base_in_mem (BASE))
+									)
+									(not (nil? (BASE "NODES")))
+									(begin
+										(setq was_find -1)
+										(setq match_ele nil)
+										(dolist (w (BASE "NODES") (if (find ma_string w) (begin (setq match_ele w) (setq  was_find $idx))) ) )
+							
+										(if (= was_find -1)
+										(begin
+											(push (list ma_string  (list "shortaddress" sa_string)) (BASE "NODES"))
+												(while (!= (length (share base_in_mem)) (length (BASE)) )
 											(share base_in_mem (BASE))
+											)
 										)
+										(> was_find -1);; 这个设备存在过了
+										(begin
+										(if (not (nil? match_ele))
+											(begin
+												(dolist (w match_ele) (if (find "shortaddress") (setq (nth $idx (nth was_find (BASE "NODES"))) (list "shortaddress" sa_string))))
+												(while (!= (length (share base_in_mem)) (length (BASE)) )
+													(share base_in_mem (BASE))
+												)
+											)
+											)
+										)
+										)
+										(setq was_find -1)
+										(setq match_ele nil)
 									)
 								)
+								(setq read_buffer (slice read_buffer  (char (nth (+ pos 1)  read_buffer) )))	
+								(setq sa_string nil) (setq ma_string nil)
 							)
+			
+						(and (= (char (nth pos read_buffer))  0xa6)  (true? (check_buffer_sum read_buffer)) ) ;;; 取pm25 : a8 len xx xx cc cc dd dd, c d is low and counter
+						(begin
+							(setq short_address nil)
+							(setq short_address (slice (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))) 0 4))
+							(setq tmp1 (get-int (reverse (slice read_buffer 4 2))))
+							(setq tmp2 (get-int (reverse (slice read_buffer 6 2))))
+							(setq pm25_ratio (div tmp1 tmp2))
+							(if (<= pm25_ratio 0.008)
+								(setq tmp 0)
+									(and (> pm25_ratio 0.008) (<= pm25_ratio 0.1 ))
+								(setq tmp 1)
+									(and (> pm25_ratio 0.01 ) (<= pm25_ratio 0.14))
+								(setq tmp 2)
+									(and (> pm25_ratio 0.014) (<= pm25_ratio 0.40)) ;; pm25 太大了也是计算错误
+								(setq tmp 3)
+							) 
+							(BASE (string short_address "_PM25") (int tmp))
+							(share base_in_mem (BASE))
+							(setq read_buffer (slice read_buffer  (char (nth (+ pos 1)  read_buffer) )))	
 						)
-						(setq was_find -1)
-						(setq match_ele nil)
+						(and (= (char (nth pos read_buffer))  0xa8)  (true? (check_buffer_sum read_buffer)) ) ;; 取 voc 有害气体数值， 数值范围只有 是 00 01 10 11 四种可能a8 xx xx ??
+						(begin
+							(setq short_address nil)
+							(setq short_address (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))))
+							(setq tmp (get-int (slice read_buffer (+ pos 4) 1 )))
+							(if (nil? tmp) (setq tmp -1)
+							)
+							(BASE (string (slice short_address 0 4) "_VOC") (int tmp))
+							(share base_in_mem (BASE))
+							(setq read_buffer (slice read_buffer  (char (nth  (+ pos 1)  read_buffer) )))				
+						)
 					)
 				)
-				(setq pos (+ pos 11))
-				(setq sa_string nil) (setq ma_string nil)
-			)
-			
-			(and (< pos len) (= (char (nth pos data))  0xa6) (< (+ pos 6) len)) ;;; 取pm25 a8 xx xx cc cc dd dd, c d is low and counter
-			(begin
-				(setq short_address nil)
-				(setq short_address (slice (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))) 0 4))
-				(setq tmp1 (get-int (reverse (slice data 3 2))))
-				(setq tmp2 (get-int (reverse (slice data 5 2))))
-				(setq pm25_ratio (div tmp1 tmp2))
-				(if (<= pm25_ratio 0.008)
-						(setq tmp 0)
-						(and (> pm25_ratio 0.008) (<= pm25_ratio 0.1 ))
-						(setq tmp 1)
-						(and (> pm25_ratio 0.01 ) (<= pm25_ratio 0.14))
-						(setq tmp 2)
-						(and (> pm25_ratio 0.014) (<= pm25_ratio 0.40)) ;; pm25 太大了也是计算错误
-						(setq tmp 3)
-				) 
-				(BASE (string short_address "_PM25") (int tmp))
-				(share base_in_mem (BASE))
-				(setq pos (+ pos 7))
-			)
-			(and (< pos len) (= (char (nth pos data))  0xa8) (< (+ pos 3) len)) ;; 取 voc 有害气体数值， 数值范围只有 是 00 01 10 11 四种可能a8 xx xx ??
-			(begin
-				(setq short_address nil)
-				(setq short_address (format "%04X" (get-int (reverse (slice data (+ pos 1) 2)))))
-				(setq tmp (get-int (nth (+ pos 3) data))	)
-				(if (nil? tmp) (setq tmp -1)
-				)
-				(BASE (string (slice short_address 0 4) "_VOC") (int tmp))
-				(share base_in_mem (BASE))
-				(setq pos (+ pos 4))			
-			)
-			(++ pos);; 默认是一个一个加，一个个位的前进
-		)
-	)
-	
-
+				(setq handle_over_flag true)
+			)		
 )
 
 (define (tcp_8087) ;; tcp 进程,专门处理串口数据; 在这儿spawn了几个进程，共同处理任务
@@ -699,53 +712,22 @@
 	)		
 )
 
+;;;;read_serial , read data from serial port ,stored into read_buffer; 
+;;;;then handle_serial_data will deal with read_buffer
+;;; then remove the dealed data in read_buffer.
+;;;;(read_serial) at least make sure ,one completed data was got !
 
 (define (read_serial fd)
     (setq ret nil)
     (setq nr nil)
-		(setq tmp nil)
+	(setq tmp nil)
 
-			(setq nr (read fd buff 64))
+			(setq nr (read fd buff 168))
+			(extend ret  buff)
 			
-			(extend ret buff)
-			
-			(if (> nr 0);; means readed sth
-			  (begin
-			  
-			    (cond 
-				((= (char (nth 0 ret)) 0x51);确保首个数据是要处理的数据，因为只有要处理的数据，才能有余下更多的数据存在
-				 (begin
-				    (if (< nr 2);;最少要有两个数据，如果意外只读了一个，再读一次，一个
-					(begin
-					  (setq nr (read fd buff 1))
-					  (extend ret buff)
-					)
-				    )
-				    (setq dlen (get-int (nth 1 ret)))
-				    (while (and (< (length ret) dlen) (> dlen 1))
-				      (setq nr (read fd buff (- dlen (length ret)) ));;精确读，不多读下一条数据
-				      (if (not (nil? nr)) (extend ret buff) )
-				    )
-				 )
-				)
-				
-				
-				
-			    )
-			  )
-			)
-			 
-			;(while (not (nil? nr))
-			;	(extend ret buff)
-				
-			;	(setq nr (peek fd))
-			;  (sleep 100)
-			;	(setq nr (peek fd))
-				;(if (> nr 0)
-			;		(setq nr (read fd buff (+ nr 10) ))
-				;)
-			;)
-	ret
+		(extend read_buffer ret)
+		(length ret);;; only return the length of ret, decide if there are datas came
+		
 )
 
 
@@ -758,22 +740,26 @@
 				(if (nil? rusbdev);; 如果usbdev 重新插上了
 					(setq rusbdev (open dev "r"))
 				)
-				(setq read_data (read_serial rusbdev) ) ;; 这儿，如果连接正常，会永远等待数据的进来，如果突然zigbee被拨掉了，也会退出来
-				(assert "read_data length: " (length read_data) "\n")
+				(setq read_len (read_serial rusbdev))  ;; 这儿，如果连接正常，会永远等待数据的进来，如果突然zigbee被拨掉了，也会退出来
 				;(sleep 100);;; make a delay to make sure data received
 				(if (= (share talk) 1)
 					(begin
-						(share content read_data)
-						(while (!= (length (share content)) (length read_data))
-							(share content read_data)
+						(share content read_buffer)
+						(while (!= (length (share content)) (length read_buffer))
+							(share content read_buffer)
 						)
 						(share talk 999)
 					)
 				)
 				;; 可能自动处理数据，比如Logger
 				;(if (> (length read_data) 0)
-					(assert "data:" (hextostring read_data ) " | " read_data "\n")
-					(handle_serial_data  read_data)
+					(if (> read_len 0)
+					  (begin
+						(assert  "read_data length: " (length read_buffer)  " || data:" (hextostring read_buffer ) "  ||  " read_buffer "\n")
+						(handle_serial_data  read_buffer)
+					  )
+					)
+				
 				;)
 				
 			)
