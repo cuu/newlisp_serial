@@ -73,11 +73,7 @@
 )
 
 (define (do_plot arg_file)	
-	;(setq PLUGIN_NAME "voc")
-	;; store whatever the plugin defined ,the name"test_plugin_data should be unique, because this is like a namespace, newlisp has no sub namspace except under MAIN
-	;(setq my_sec_name "argscmd")
-	;(setq arg_file (string "rules/" PLUGIN_NAME ".arg"))
-	
+	(setq my_sec_name "argscmd")
 	(set 'in-file (open arg_file "read"))
 	(if (not (nil? in-file))
 		(setq abc (read-line in-file))
@@ -140,17 +136,15 @@
 			(setq tmp (parse cmd_str "="))
 			(if (> (length tmp) 1)
 				(begin
-					
-					(if (starts-with (nth 0 tmp) "DEV");; only handle DEV* 
+					(if (starts-with (nth 0 tmp) "DEV");; only handle DEV*  ,lookup in share base_in_mem
 							(begin
-								(if (not (nil? (MAIN:BASE (string (nth 1 tmp) ))))
-									(plugin_data (nth 0 tmp)  (MAIN:BASE (string (nth 1 tmp))) );; store to the Tree 
+								(if (not (nil? (lookup (list (string (nth 1 tmp))) (share base_in_mem) ))) ;; it must be at the frist level, in share base_in_mem
+									(plugin_data (nth 0 tmp)    (lookup(list(string(nth 1 tmp))) (share base_in_mem)) );; store to the Tree  from share base_in_mem
 									(plugin_data (nth 0 tmp)  0 )
 								)
 							)
 							(plugin_data (nth 0 tmp)  (nth 1 tmp))
 					) 
-					
 				)
 			)
 		)
@@ -399,7 +393,7 @@
 ;; 在数据库中，每个数据是以：短地址_数据名称 这样的key存在 
 ;; 所有短地址（设备）的素引则是名称为 ALL_DEV 的key
 ;; use slice more than nth is safer
-
+;; if there are too many chaos datas comming, this still will suck, So I need to control the datas outputing of cc2530 
 	
 	(setq pos 0);; pos maybe forever be 0 
 	(setq handle_over_flag nil)
@@ -408,7 +402,7 @@
 			(if  (true? (check_buffer_sum read_buffer)) ;; this checking  is for handle_over_flag
 				(begin
 						(if
-							(and (= (char (nth pos read_buffer))  0x06)  (true? (check_buffer_sum read_buffer)) )  ;; panid，从和openwrt连着的zigbee获得 0x06 len pa id
+							(and (= (char (slice read_buffer pos 1))  0x06)  (true? (check_buffer_sum read_buffer)) )  ;; panid，从和openwrt连着的zigbee获得 0x06 len pa id
 							(begin
 								(setq panid (slice (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))) 0 4))
 								(if (not (nil? (BASE "PANID")))
@@ -421,10 +415,10 @@
 									(BASE "PANID" panid)
 								)
 								(share base_in_mem (BASE))
-					
-								(setq read_buffer (slice read_buffer  (char (nth (+ pos 1)  read_buffer) )))
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
+								(setq pos -1)
 							)
-							(and (= (char (nth pos read_buffer))  0xa0)  (true? (check_buffer_sum read_buffer)) )  ;; 温度, 0xa0 len xx xx tt tt
+							(and (= (char (slice read_buffer pos 1))  0xa0)  (true? (check_buffer_sum read_buffer)) )  ;; 温度, 0xa0 len xx xx tt tt
 							(begin
 								(setq tmp nil)
 								(setq short_address nil)
@@ -432,21 +426,25 @@
 								(setq tmp (get-int (slice read_buffer (+ pos 4) 2)))
 								(BASE (string  short_address "_TEMP") (int tmp))
 								(save "base.lsp" 'BASE)
+								
 								(share base_in_mem (BASE))
-								(setq read_buffer (slice read_buffer  (char (nth (+ pos 1)  read_buffer) )))
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
+								(setq pos -1)
 							)
-							(and (= (char (nth pos read_buffer))  0xa1)  (true? (check_buffer_sum read_buffer)) ) ;; shi度,
+							(and (= (char (slice read_buffer pos 1))  0xa1)  (true? (check_buffer_sum read_buffer)) ) ;; shi度,
 							(begin
 								(setq tmp nil)
 								(setq short_address nil)	
 								(setq short_address (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))) )
 								(setq tmp (get-int (reverse (slice read_buffer (+ pos 4) 2))))
 								(BASE (string  (slice short_address 0 4) "_HUMI") (int tmp));; humidity 
+								
 								(share base_in_mem (BASE))
-								(setq read_buffer (slice read_buffer  (char (nth (+ pos 1)  read_buffer) )))
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
+								(setq pos -1)
 							)
 					
-							(and (= (char (nth pos read_buffer))  0x02)   (true? (check_buffer_sum read_buffer)) );;;取子节点短地址0x02 len xx xx mmmmmmmm.,0x02+len+短地址+Mac地址
+							(and (= (char (slice read_buffer pos 1))  0x02)   (true? (check_buffer_sum read_buffer)) );;;取子节点短地址0x02 len xx xx mmmmmmmm.,0x02+len+短地址+Mac地址
 							(begin
 								(setq short_address nil)
 								(setq short_address (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))))
@@ -488,11 +486,13 @@
 										(setq match_ele nil)
 									)
 								)
-								(setq read_buffer (slice read_buffer  (char (nth (+ pos 1)  read_buffer) )))	
+								(share base_in_mem (BASE))
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
+								(setq pos -1)
 								(setq sa_string nil) (setq ma_string nil)
 							)
 			
-						(and (= (char (nth pos read_buffer))  0xa6)  (true? (check_buffer_sum read_buffer)) ) ;;; 取pm25 : a8 len xx xx cc cc dd dd, c d is low and counter
+						(and (= (char (slice read_buffer pos 1))  0xa6)  (true? (check_buffer_sum read_buffer)) ) ;;; 取pm25 : a8 len xx xx cc cc dd dd, c d is low and counter
 						(begin
 							(setq short_address nil)
 							(setq short_address (slice (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))) 0 4))
@@ -509,10 +509,12 @@
 								(setq tmp 3)
 							) 
 							(BASE (string short_address "_PM25") (int tmp))
-							(share base_in_mem (BASE))
-							(setq read_buffer (slice read_buffer  (char (nth (+ pos 1)  read_buffer) )))	
+							
+								(share base_in_mem (BASE))
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
+								(setq pos -1)
 						)
-						(and (= (char (nth pos read_buffer))  0xa8)  (true? (check_buffer_sum read_buffer)) ) ;; 取 voc 有害气体数值， 数值范围只有 是 00 01 10 11 四种可能a8 xx xx ??
+						(and (= (char (slice read_buffer pos 1))  0xa8)  (true? (check_buffer_sum read_buffer)) ) ;; 取 voc 有害气体数值， 数值范围只有 是 00 01 10 11 四种可能a8 xx xx ??
 						(begin
 							(setq short_address nil)
 							(setq short_address (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))))
@@ -520,10 +522,23 @@
 							(if (nil? tmp) (setq tmp -1)
 							)
 							(BASE (string (slice short_address 0 4) "_VOC") (int tmp))
-							(share base_in_mem (BASE))
-							(setq read_buffer (slice read_buffer  (char (nth  (+ pos 1)  read_buffer) )))				
+								(share base_in_mem (BASE))
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
+								(setq pos -1)		
+						)
+						(and (= (char (slice read_buffer pos 1))  0xb2)  (true? (check_buffer_sum read_buffer)) ) ;; Ports log
+						(begin
+							(setq short_address nil)
+							(setq short_address (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))))
+							(setq tmp (get-int (slice read_buffer (+ pos 4) 1 )))
+							(setq status  (get-int (slice read_buffer (+ pos 5) 1 )))
+							(BASE (string (slice short_address 0 4) "_PORT_" tmp) status)
+								(share base_in_mem (BASE))
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
+								(setq pos -1)
 						)
 					)
+					(++ pos)
 				)
 				(setq handle_over_flag true)
 			)		
@@ -816,7 +831,7 @@
 
 	(new Tree 'plugin_data)
 	
-	(while 1
+	(while true
 		
 		(if (and (not (nil? (share base_in_mem))) (list? (share base_in_mem)))
 			(begin
