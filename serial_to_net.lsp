@@ -12,13 +12,9 @@
 (constant 'PORT2 8086)
 (constant 'ReadMax 138)
 (constant 'SIGINT 2)
-(constant 'DEV0 "/dev/ttyUSB0");; 测试时用usb
-(constant 'DEV1 "/dev/ttyATH0");; 正式版用串口
-
-(define (get-parent_id) (sys-info 6))
-(define (getpid) (sys-info 7))
-
-(change-dir "/usr/share")
+(constant 'dev "/dev/ttyUSB0");; 
+d
+;(change-dir "/usr/share")
 (define (assert)
 	
 	(setq ret  "") 
@@ -55,21 +51,16 @@
 
 (setq cmd_line nil)
 (global 'cmd_line)
-(setq read_buffer nil);;;
+(setq read_buffer "");;;
 (global 'read_buffer);;; The buffer like sscom32''s textarea, store all the results ,minapulated by functions.
 
-
-(if (or (= ostype "Win32") (= ostype "Cygwin")) ;;设定设备名称，至于S10，也未必一定是S10,具体视cygwin环境
-	(setq dev "/dev/ttyS10") ;; on win32 with cygwin!
-	(setq dev DEV0) ;; all linux platform,espcially in openwrt 
-)
-
-(setq dev1 DEV1);; 这儿没有考虑win了
 
 ;;; load策略文件
 (if (file? "base.lsp")
 	(load "base.lsp")
 	(new Tree 'BASE);基本策略，永远在执行得到基本环境信息的功能
+)
+(if-not (true? BASE) (new Tree 'BASE)
 )
 
 (define (do_plot arg_file)	
@@ -348,8 +339,10 @@
 	(if (or (= ostype "Win32") (= ostype "Cygwin")) ;;串口配置指令
 		(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " -ixon -icanon  min 2 time 0") )
 		;(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " -ignbrk -brkint -igncr －ignpar -imaxbel -opost -onlcr -isig -icanon -iexten -echo -echoe -echok -echoctl -echoke noflsh   min 150 time 1"))
-		(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " raw min 1 time 0")) ;;最少2个字节，一个肯定是长度字节，另一个肯定是数所头字节，还有数据内容字节，可能是0，时间无限一直等待
+		(setq serial_port_setting (string "stty -F " dev_str " cs8 " baud " raw ")) ;;最少2个字节，一个肯定是长度字节，另一个肯定是数所头字节，还有数据内容字节，可能是0，时间无限一直等待
 	)
+	
+	(println serial_port_setting)
 	(exec serial_port_setting)
 )
 
@@ -379,13 +372,20 @@
 ;;; buffer len flag must be at least over 2
 ;;; (length of buffer must be >= of buffer len flag
 
-(define (check_buffer_sum buffer, pos)
-	(setq pos 0)
-	
-	 (if (and (> (length buffer) 1) (> (char (slice buffer (+ pos 1) 1)) 2 ) (>= (length buffer) (char (slice buffer (+ pos 1) 1))))
-	 )
+(define (check_buffer_sum buffer  pos)
+
+	 (if (and (> (length buffer) 1) (> (char (slice buffer (+ pos 1) 1)) 2 ) (>= (length buffer) (char (slice buffer (+ pos 1) 1)) ))
+		(begin
+			(println "in check pos: " pos " len flag: " (char (slice buffer (+ pos 1) 1))  " buffer len: " (length buffer))	
+			true
+		)
+		(begin
+			(println "in check ,nil " pos)
+			nil
+		)
+	 ) 
 )
-;;;憨豆呆他
+
 (define (handle_serial_data);; 处理来自串口的数据，基本上就是得到数据，存入数据库，就这样，很重要的核心功能
 ;; 要处理的data,可能是一只数据，也可能是几只数据粘在一条数据链上发过来的，例如，温度或是温度+湿度
 ;; 每个数据除了唯一性的数据头之外，还必须带上发出设备的短地址，以区别是哪个房间的数据
@@ -398,11 +398,12 @@
 	(setq pos 0);; pos maybe forever be 0 
 	(setq handle_over_flag nil)
 	
-	(while (nil? handle_over_flag)
-			(if  (true? (check_buffer_sum read_buffer)) ;; this checking  is for handle_over_flag
+	(while (> (length read_buffer)  pos)
+			(println "enter while")
+			;(if (true? (check_buffer_sum read_buffer pos))  ;; this checking  is for handle_over_flag
 				(begin
 						(if
-							(and (= (char (slice read_buffer pos 1))  0x06)  (true? (check_buffer_sum read_buffer)) )  ;; panid，从和openwrt连着的zigbee获得 0x06 len pa id
+							(and (= (char (slice read_buffer pos 1))  0x06)  (true? (check_buffer_sum read_buffer pos)) )  ;; panid，从和openwrt连着的zigbee获得 0x06 len pa id
 							(begin
 								(setq panid (slice (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))) 0 4))
 								(if (not (nil? (BASE "PANID")))
@@ -415,10 +416,10 @@
 									(BASE "PANID" panid)
 								)
 								(share base_in_mem (BASE))
-								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
-								(setq pos -1)
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos 2) ))
+								(setq pos -1) ;; for cooperate (++ pos)
 							)
-							(and (= (char (slice read_buffer pos 1))  0xa0)  (true? (check_buffer_sum read_buffer)) )  ;; 温度, 0xa0 len xx xx tt tt
+							(and (= (char (slice read_buffer pos 1))  0xa0)  (true? (check_buffer_sum read_buffer pos) ))  ;; 温度, 0xa0 len xx xx tt tt
 							(begin
 								(setq tmp nil)
 								(setq short_address nil)
@@ -428,10 +429,10 @@
 								(save "base.lsp" 'BASE)
 								
 								(share base_in_mem (BASE))
-								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos 2) ))
 								(setq pos -1)
 							)
-							(and (= (char (slice read_buffer pos 1))  0xa1)  (true? (check_buffer_sum read_buffer)) ) ;; shi度,
+							(and (= (char (slice read_buffer pos 1))  0xa1)  (true? (check_buffer_sum read_buffer pos )) ) ;; shi度,
 							(begin
 								(setq tmp nil)
 								(setq short_address nil)	
@@ -440,22 +441,23 @@
 								(BASE (string  (slice short_address 0 4) "_HUMI") (int tmp));; humidity 
 								
 								(share base_in_mem (BASE))
-								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos 2) ))
 								(setq pos -1)
 							)
 					
-							(and (= (char (slice read_buffer pos 1))  0x02)   (true? (check_buffer_sum read_buffer)) );;;取子节点短地址0x02 len xx xx mmmmmmmm.,0x02+len+短地址+Mac地址
+							(and (= (char (slice read_buffer pos 1))  0x02)   (true? (check_buffer_sum read_buffer pos )) );;;取子节点短地址0x02 len xx xx mmmmmmmm.,0x02+len+短地址+Mac地址
 							(begin
+								(println  (true? (check_buffer_sum read_buffer pos ))  "|" (hextostring (slice read_buffer pos   (get-int (slice read_buffer  (+ pos 1) 1) ) )) )
 								(setq short_address nil)
 								(setq short_address (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))))
-								(setq mac_address (hextostring (slice read_buffer (+ pos 4) 8))) 
-								(setq sa_string (slice short_address 0 4))
-								(setq ma_string (slice mac_address 0 8))
-				
+								(setq mac_address (hextostring (slice  read_buffer  (+ pos 4) 8))) 
+								(setq sa_string (slice short_address -4))
+								(setq ma_string mac_address )
+								(println sa_string " " ma_string)
 								(if (nil? (BASE "NODES"))
 									(begin
 										(BASE "NODES" (list (list ma_string (list "shortaddress" sa_string))))
-										(share base_in_mem (BASE))
+										(save "base.lsp" 'BASE)
 									)
 									(not (nil? (BASE "NODES")))
 									(begin
@@ -466,18 +468,23 @@
 										(if (= was_find -1)
 										(begin
 											(push (list ma_string  (list "shortaddress" sa_string)) (BASE "NODES"))
-												(while (!= (length (share base_in_mem)) (length (BASE)) )
-											(share base_in_mem (BASE))
-											)
+												(while (!= (length (share base_in_mem)) (length (BASE)) )	
+													(share base_in_mem (BASE))
+													(println "while share BASE " (length (share base_in_mem)) " " (length (BASE)) )
+												)
+											(save "base.lsp" 'BASE)
 										)
 										(> was_find -1);; 这个设备存在过了
 										(begin
+										(println "mac address exsited")
 										(if (not (nil? match_ele))
 											(begin
 												(dolist (w match_ele) (if (find "shortaddress") (setq (nth $idx (nth was_find (BASE "NODES"))) (list "shortaddress" sa_string))))
 												(while (!= (length (share base_in_mem)) (length (BASE)) )
 													(share base_in_mem (BASE))
+													(println "while share BASE")
 												)
+												(save "base.lsp" 'BASE)
 											)
 											)
 										)
@@ -487,12 +494,13 @@
 									)
 								)
 								(share base_in_mem (BASE))
-								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos 2) ))
+								(println "after :" (hextostring read_buffer) " pos: " pos)
 								(setq pos -1)
 								(setq sa_string nil) (setq ma_string nil)
 							)
 			
-						(and (= (char (slice read_buffer pos 1))  0xa6)  (true? (check_buffer_sum read_buffer)) ) ;;; 取pm25 : a8 len xx xx cc cc dd dd, c d is low and counter
+						(and (= (char (slice read_buffer pos 1))  0xa6)  (true? (check_buffer_sum read_buffer pos )) ) ;;; 取pm25 : a8 len xx xx cc cc dd dd, c d is low and counter
 						(begin
 							(setq short_address nil)
 							(setq short_address (slice (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))) 0 4))
@@ -511,10 +519,10 @@
 							(BASE (string short_address "_PM25") (int tmp))
 							
 								(share base_in_mem (BASE))
-								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos 2) ))
 								(setq pos -1)
 						)
-						(and (= (char (slice read_buffer pos 1))  0xa8)  (true? (check_buffer_sum read_buffer)) ) ;; 取 voc 有害气体数值， 数值范围只有 是 00 01 10 11 四种可能a8 xx xx ??
+						(and (= (char (slice read_buffer pos 1))  0xa8)  (true? (check_buffer_sum read_buffer pos )) ) ;; 取 voc 有害气体数值， 数值范围只有 是 00 01 10 11 四种可能a8 xx xx ??
 						(begin
 							(setq short_address nil)
 							(setq short_address (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))))
@@ -523,10 +531,10 @@
 							)
 							(BASE (string (slice short_address 0 4) "_VOC") (int tmp))
 								(share base_in_mem (BASE))
-								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos 2) ))
 								(setq pos -1)		
 						)
-						(and (= (char (slice read_buffer pos 1))  0xb2)  (true? (check_buffer_sum read_buffer)) ) ;; Ports log
+						(and (= (char (slice read_buffer pos 1))  0xb2)  (true? (check_buffer_sum read_buffer pos)) ) ;; Ports log
 						(begin
 							(setq short_address nil)
 							(setq short_address (format "%04X" (get-int (reverse (slice read_buffer (+ pos 2) 2)))))
@@ -534,14 +542,19 @@
 							(setq status  (get-int (slice read_buffer (+ pos 5) 1 )))
 							(BASE (string (slice short_address 0 4) "_PORT_" tmp) status)
 								(share base_in_mem (BASE))
-								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos) ))
-								(setq pos -1)
+								(setq read_buffer (slice read_buffer  (+ (char (slice read_buffer  (+ pos 1) 1) ) pos 2) ))
+								(setq pos -1) 
 						)
 					)
-					(++ pos)
 				)
-				(setq handle_over_flag true)
-			)		
+				;(begin
+				;	(println "check sum failed " (true? (check_buffer_sum read_buffer pos)) )
+				;	(setq handle_over_flag true)
+				;)
+			;)
+			(++ pos);; for ending while	, let the checking one by one on the string 
+	)
+	(println "while end")
 )
 
 (define (tcp_8087) ;; tcp 进程,专门处理串口数据; 在这儿spawn了几个进程，共同处理任务
@@ -674,6 +687,33 @@
 		(net-close connection)
 	)		
 )
+(define (tcp_debug, listen)
+	(setq listen (net-listen 8089))
+		(unless (not (nil? listen)) 
+		(begin
+			(print "listening " 8089 " failed\n")
+			(abort)
+			(exit)
+		)
+	)
+	(print "Waiting for connection on: 8089 \n")
+	
+		(while (!= (share talk) 19)
+			(set 'connection (net-accept listen))
+			(net-send connection ">" 1)
+			(while (not (net-select connection "r" 1000)))
+		
+				(while (net-select connection "w" 1000)
+					(if (setq rvlen (net-receive connection buff ReadMax "\n"))
+						(begin
+							(eval-string buff)
+						)
+					)
+				)
+				(assert "close connect port1\n")
+				(net-close connection)
+		)
+)
 
 (define (tcp_8083) ;; tcp 进程,专门处理串口数据
 	
@@ -708,8 +748,8 @@
 							
 							(assert abctimer " times sleep over\n")
 							(share talk 0);; 清除 标志，read process有返回了
-							(assert (share content))
-							(assert "\n")
+							(assert (share content) "\n")
+							
 							(net-send connection (share content))
 							(share content "") ;; 清空，如果发送过，就清空
 							
@@ -731,71 +771,83 @@
 ;;;;then handle_serial_data will deal with read_buffer
 ;;; then remove the dealed data in read_buffer.
 ;;;;(read_serial) at least make sure ,one completed data was got !
-
-(define (read_serial fd)
-    (setq ret nil)
-    (setq nr nil)
-	(setq tmp nil)
-
-			(setq nr (read fd buff 168))
-			(extend ret  buff)
-			
-		(extend read_buffer ret)
-		(length ret);;; only return the length of ret, decide if there are datas came
-		
+(define (parse_stdin stdbuf ,tmplst,buff)
+	
+	(while (ends-with stdbuf " ") ( setq stdbuf (chop stdbuf 1)))
+	
+	(setq buff (replace "  " stdbuf " "))
+	(setq tmplst (parse buff " "))
+	(dolist (x tmplst)
+			(extend read_buffer (char (int (slice x 0 2) 0 16)))
+	)
+	(length tmplst)
 )
 
+(define (read_serial fd,buff)
+    (setq nr nil)
+    
+			(if (> (peek fd) 3)
+				(setq nr (read fd buff (peek fd)))
+				(setq nr (read fd buff 128 ))
+				
+			)
+		
+		(parse_stdin buff)   ;;; TEST
+		;(if (and  (not (nil? nr)) (> nr 0)  (not (nil? buff) ))  (extend read_buffer buff)  )
+		(length buff);;; only return the length of ret, decide if there are datas came	
+)
+
+(setq rusbdev 1) ;; *test*  READ FROM STDIN
 
 (define (read_serial_process) ;;读串口的取程,启动时，考虑没有进程占用 /dev/ttyUSB0,顺便处理策略
 		
 	(while (not (= (share talk) 10000))
-		(if (file? dev)
-			(begin
 				;;从串口读取数据
 				(if (nil? rusbdev);; 如果usbdev 重新插上了
-					(setq rusbdev (open dev "r"))
-				)
-				(setq read_len (read_serial rusbdev))  ;; 这儿，如果连接正常，会永远等待数据的进来，如果突然zigbee被拨掉了，也会退出来
-				;(sleep 100);;; make a delay to make sure data received
-				(if (= (share talk) 1)
 					(begin
-						(share content read_buffer)
-						(while (!= (length (share content)) (length read_buffer))
-							(share content read_buffer)
-						)
-						(share talk 999)
+						(setq rusbdev (open dev "r"))
+						(println "replug: " rusbdev)
 					)
-				)
+					(not (nil? rusbdev))
+					(begin
+						(println "reading serial: " dev)
+						(setq read_len (read_serial rusbdev))  
+						;(setq read_len (read_stdin));; simulate serial input
+					)
+				)				
+				;(if (= (share talk) 1)
+				;	(begin
+				;		(share content read_buffer)
+				;		(while (!= (length (share content)) (length read_buffer))
+				;			(share content read_buffer)
+				;		)
+				;		(share talk 999)
+				;	)
+				;)
 				;; 可能自动处理数据，比如Logger
-				;(if (> (length read_data) 0)
+				;if (> (length read_data) 0)
+					(println "read_len: " read_len)
 					(if (> read_len 0)
 					  (begin
-						(assert  "read_data length: " (length read_buffer)  " || data:" (hextostring read_buffer ) "  ||  " read_buffer "\n")
-						(handle_serial_data  read_buffer)
+						(assert  "read_buffer length: " (length read_buffer)  " || data:" (hextostring read_buffer ) "  ||  " read_buffer "\n")
+						(handle_serial_data )
 					  )
 					)
 				
 				;)
 				
 			)
-			(if-not (file? dev);;如果突然 usb设备被拨掉，这儿就要清除掉这个rusbdev
-				(begin
-					(if-not (nil? rusbdev) (close rusbdev))
-					(setq rusbdev nil)
-				)
-			)
-		)
-	)
 )
 
-(while (not  (file? dev))
-	(sleep 5000)
-	(println "waiting for device to be plugged")
-)
-(set_serial dev)
+;(while (not  (file? dev))
+;	(sleep 5000)
+;	(println "waiting for device to be plugged")
+;)
+;(set_serial dev)
 ;; fork now
-(setq cpid1 (spawn 'read_p (read_serial_process)))
+;(setq cpid1 (spawn 'read_p (read_serial_process)))
 (setq cpid2 (spawn 'tcp_p1 (tcp_8083)))
+(setq cpid3 (spawn 'tcp_p2 (tcp_debug)))
 
 (set 'server (net-listen 8087))
 	
@@ -905,6 +957,7 @@
 
 (signal SIGINT ctrlC-handler)
 
-(setq cpid3 (spawn 'base_p (base_plot)))
+;(setq cpid3 (spawn 'base_p (base_plot)))
 
 
+(read_serial_process)
